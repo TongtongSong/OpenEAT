@@ -4,17 +4,16 @@
 set -e
 set -o pipefail
 
-AnacondaPath=/Work18/2020/songtongtong/anaconda3
-ENVIRONMENT=torch1.9_cuda11.1
+AnacondaPath=/Work18/2020/songtongtong/anaconda3 # modify yourself
+ENVIRONMENT=torch1.9_cuda11.1 # modify yourself
 conda activate $ENVIRONMENT
 
 export PYTHONIOENCODING=UTF-8
 export PATH=$PWD/tools:$PWD/openeat:$PWD:$AnacondaPath/envs/$ENVIRONMENT/bin/:$PATH
 export LC_ALL=C
-export CUDA_VISIBLE_DEVICES="0"
+export CUDA_VISIBLE_DEVICES="0" # modify yourself
 
-corpus=/Work21/2020/songtongtong/data/corpus/AISHELL-1
-data_suffix=".gpu05"
+corpus=/Work21/2020/songtongtong/data/corpus/AISHELL-1 # modify yourself
 stage=0
 stop_stage=3
 
@@ -32,7 +31,7 @@ training_stage=0
 num_workers=1
 train_set=train
 dev_set=dev
-exp_name=transformer_12_3_3_256_1024_wavdither1.0 # modify yourself
+exp_name=test # modify yourself
 train_config=conf/train.yaml
 checkpoint=
 
@@ -162,6 +161,7 @@ if [ ${stage} -le ${decoding_stage} ] && [ ${stop_stage} -ge ${decoding_stage} ]
             done
             wait
             cat $tmpdir/*.text > $decode_dir/text
+            cat $tmpdir/recognize.log > $decode_dir/recognize.log
             rm -r $tmpdir
             }
         done
