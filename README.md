@@ -3,7 +3,7 @@ Open source end-to-end ASR toolkit (OpenEAT) for research and competition.
 
 # Highlights
 - Wenet lightning
-- Transfomrer-based LM Shollow Fusion
+- Transfomrer-based LM shollow fusion
 - Processing text online
 - Adapter for fine-tuning
 
