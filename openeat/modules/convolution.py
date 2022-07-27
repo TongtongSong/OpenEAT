@@ -18,9 +18,7 @@ class ConvolutionModule(nn.Module):
                  channels: int,
                  kernel_size: int = 15,
                  activation: torch.nn.Module=nn.ReLU(),
-                 norm: str='batch_norm',
-                 casual: bool=False,
-                 bias: bool=True):
+                 casual: bool=False):
         """Construct an ConvolutionModule object.
         Args:
             channels (int): The number of channels of conv layers.
@@ -35,7 +33,7 @@ class ConvolutionModule(nn.Module):
             kernel_size=1,
             stride=1,
             padding=0,
-            bias=bias
+            bias=True
         )
         # self.lorder is used to distinguish if it's a causal convolution,
         # if self.lorder > 0: it's a causal convolution, the input will be
@@ -57,22 +55,16 @@ class ConvolutionModule(nn.Module):
             stride=1,
             padding=padding,
             groups=channels,
-            bias=bias
+            bias=True
         )
-        assert norm in ['batch_norm', 'layer_norm']
-        if norm == "batch_norm":
-            self.use_layer_norm = False
-            self.norm = nn.BatchNorm1d(channels)
-        else:
-            self.use_layer_norm = True
-            self.norm = nn.LayerNorm(channels)
+        self.norm = nn.LayerNorm(channels)
         self.pointwise_conv2 = nn.Conv1d(
             channels,
             channels,
             kernel_size=1,
             stride=1,
             padding=0,
-            bias=bias
+            bias=True
         )
         self.activation = activation
     
@@ -112,13 +104,11 @@ class ConvolutionModule(nn.Module):
         x = self.pointwise_conv1(x)  # (batch, 2*channel, dim)
         x = nn.functional.glu(x, dim=1)  # (batch, channel, dim)
 
-        # 1D Depthwise Conv
+        # DSCNN
         x = self.depthwise_conv(x)
-        if self.use_layer_norm:
-            x = x.transpose(1, 2)
+        x = x.transpose(1, 2)
         x = self.activation(self.norm(x))
-        if self.use_layer_norm:
-            x = x.transpose(1, 2)
+        x = x.transpose(1, 2)
         x = self.pointwise_conv2(x)
         
         # mask batch padding

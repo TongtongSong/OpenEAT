@@ -1,5 +1,5 @@
 import re
-def _tokenizer(sp, text, char_dict):
+def _tokenizer(text, sp, char_dict):
     tokens = []
     pattern = re.compile(r'([\u4e00-\u9fff])')
     # Example:
@@ -20,3 +20,19 @@ def _tokenizer(sp, text, char_dict):
             else:
                 tokens.append(ch_or_w)
     return tokens
+
+def preprocess_Chinese(text):
+    from zhon.hanzi import punctuation 
+    text = re.sub(r'[{}]+'.format(punctuation),'',text)
+    return text
+def preprocess_English(text):
+    from string import punctuation
+    punctuation = punctuation.replace('\'','') # keep "I'm" invariant
+    text = re.sub(r'[{}]+'.format(punctuation),'',text)
+    return text
+def _remove_punctuation(text):
+    text = preprocess_Chinese(text)
+    text = preprocess_English(text)
+    text = text.replace('\\','')
+    return text
+

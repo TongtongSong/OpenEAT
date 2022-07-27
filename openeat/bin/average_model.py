@@ -1,10 +1,4 @@
-'''
-@Author: Zhengkun Tian
-@Email: zhengkun.tian@outlook.com
-@Date: 2020-04-16 21:50:10
-@LastEditTime: 2020-04-16 21:52:56
-@FilePath: \OpenTransformer\tools\average.py
-'''
+# Copyright 2020 zhengkun.tian@outlook.com (Zhengkun Tian)
 # Copyright 2022 songtongmail@163.com (Tongtong Song)
 
 import argparse
@@ -17,7 +11,10 @@ def parse_args():
     parser = argparse.ArgumentParser(description='average model')
     parser.add_argument('--src_path',
                         required=True,
-                        help='src model path for average')
+                        help='src model path used for averaging models')
+    parser.add_argument('--dst_model',
+                        required=True,
+                        help='dst model used for saving checkpoint')
     parser.add_argument('--start',
                         default=0,
                         type=int,
@@ -45,7 +42,7 @@ def average_chkpt(args):
         if torch.cuda.is_available():
           state = torch.load(os.path.join(args.src_path, chkpt))
         else:
-          state = torch.load(os.path.join(args.src_path, chkpt),map_location=torch.device('cpu'))
+          state = torch.load(os.path.join(args.src_path, chkpt), map_location=torch.device('cpu'))
         # Copies over the settings from the first checkpoint
 
         if new_state is None:
@@ -84,8 +81,8 @@ def average_chkpt(args):
     
         new_state[key] = averaged_params[key]
 
-    torch.save(new_state, os.path.join(args.src_path, 'avg_%sto%s.pt' % (args.start, args.end)))
-    print('Save the average checkpoint as %s' % os.path.join(args.src_path,  'avg_%sto%s.pt' % (args.start, args.end)))
+    torch.save(new_state, args.dst_model)
+    print('Save the average checkpoint to %s' % args.dst_model)
     print('Done!')
 
 args = parse_args()

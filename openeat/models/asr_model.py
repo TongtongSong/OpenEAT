@@ -19,12 +19,10 @@ import torch
 import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_sequence
 
-from openeat.modules.embedding import (PositionalEncoding, RelPositionalEncoding)
-from openeat.modules.subsampling import (Conv2dSubsampling4, Conv2dSubsampling6, 
-                                         Conv2dSubsampling8, LinearNoSubsampling)
+
 from openeat.modules.ctc import CTC
 from openeat.modules.decoder import BiDecoder
-from openeat.modules.encoder import Encoder
+from openeat.modules.encoder import TransformerEncoder
 from openeat.modules.label_smoothing_loss import LabelSmoothingLoss
 
 from openeat.utils.common import (IGNORE_ID, reverse_pad_list, add_sos_eos, log_add,
@@ -53,8 +51,6 @@ class ASRModel(torch.nn.Module):
         macaron_style: bool = True,
         use_cnn_module: bool = True,
         cnn_module_kernel: int = 15,
-        cnn_module_norm: str = 'batch_norm',
-        causal: bool = False,
         encoder_use_adapter: bool = False,
         decoder_use_adapter: bool = False,
         down_size: int = 64,
@@ -74,36 +70,12 @@ class ASRModel(torch.nn.Module):
         self.ctc_weight = ctc_weight
         self.reverse_weight = reverse_weight
 
-        if pos_enc_layer_type == "abs_pos":
-            pos_enc_class = PositionalEncoding
-        elif pos_enc_layer_type == "rel_pos":
-            pos_enc_class = RelPositionalEncoding
-        elif pos_enc_layer_type == "no_pos":
-            pos_enc_class = NoPositionalEncoding
-        else:
-            raise ValueError("unknown pos_enc_layer: " + pos_enc_layer_type)
-
-        if input_layer == "linear":
-            subsampling_class = LinearNoSubsampling
-        elif input_layer == "conv2d":
-            subsampling_class = Conv2dSubsampling4
-        elif input_layer == "conv2d6":
-            subsampling_class = Conv2dSubsampling6
-        elif input_layer == "conv2d8":
-            subsampling_class = Conv2dSubsampling8
-        else:
-            raise ValueError("unknown input_layer: " + input_layer)
-        self.embed = subsampling_class(
-            input_size,
-            d_model,
-            pos_enc_class(d_model)
-        )
-
-        encoder_args = (d_model, dropout_rate, attention_heads, linear_units, 
-                        encoder_num_blocks, activation_type, macaron_style,
-                        use_cnn_module, cnn_module_kernel, cnn_module_norm, causal, 
+        encoder_args = (input_size, input_layer, pos_enc_layer_type,
+                        d_model, dropout_rate, attention_heads, linear_units, 
+                        encoder_num_blocks, activation_type, 
+                        macaron_style, use_cnn_module, cnn_module_kernel,
                         encoder_use_adapter, down_size, scalar)
-        self.encoder = Encoder(*encoder_args)
+        self.encoder = TransformerEncoder(*encoder_args)
 
         self.ctc = CTC(vocab_size, d_model, length_normalized_loss)
 
@@ -140,7 +112,7 @@ class ASRModel(torch.nn.Module):
         assert (features.shape[0] == features_length.shape[0] == targets.shape[0] ==
                 targets_length.shape[0]), (features.shape, features_length.shape,
                                          targets.shape, targets_length.shape)
-        encoder_out, encoder_mask = self._forward_encoder(features, features_length)
+        encoder_out, encoder_mask = self.encoder(features, features_length)
         encoder_out_lens = encoder_mask.squeeze(1).sum(1)
         loss_ctc = self.ctc(encoder_out, encoder_out_lens, targets, targets_length)
         if self.ctc_weight < 1:
@@ -152,16 +124,6 @@ class ASRModel(torch.nn.Module):
             loss = loss_ctc
             acc = None
         return loss, acc
-    
-    def _forward_encoder(
-        self,
-        features: torch.Tensor,
-        features_length: torch.Tensor,
-    )-> Tuple[torch.Tensor, torch.Tensor]:
-        masks = ~make_pad_mask(features_length, features.size(1)).unsqueeze(1)  # (B, 1, T)
-        xs, mask, pos_emb = self.embed(features, masks)
-        encoder_out, encoder_mask = self.encoder(xs, mask, pos_emb)
-        return encoder_out, encoder_mask
     
     def _calc_att_loss(
         self,
@@ -223,7 +185,7 @@ class ASRModel(torch.nn.Module):
 
         # Let's assume B = batch_size and N = beam_size
         # 1. Encoder
-        encoder_out, encoder_mask = self._forward_encoder(features, features_length)
+        encoder_out, encoder_mask = self.encoder(features, features_length)
         #encoder_out = self.affine_norm(self.affine_linear(encoder_out))
         maxlen = encoder_out.size(1)
         encoder_dim = encoder_out.size(2)
@@ -311,7 +273,7 @@ class ASRModel(torch.nn.Module):
         assert features.shape[0] == features_length.shape[0]
         batch_size = features.shape[0]
         # Let's assume B = batch_size
-        encoder_out, encoder_mask = self._forward_encoder(features, features_length)
+        encoder_out, encoder_mask = self.encoder(features, features_length)
         maxlen = encoder_out.size(1)
         encoder_out_lens = encoder_mask.squeeze(1).sum(1)
         ctc_probs = self.ctc.log_softmax(
@@ -346,7 +308,7 @@ class ASRModel(torch.nn.Module):
         assert batch_size == 1
         # Let's assume B = batch_size and N = beam_size
         # 1. Encoder forward and get CTC score
-        encoder_out, encoder_mask = self._forward_encoder(features, features_length)
+        encoder_out, encoder_mask = self.encoder(features, features_length)
         maxlen = encoder_out.size(1)
         ctc_probs = self.ctc.log_softmax(
             encoder_out)  # (1, maxlen, vocab_size)
@@ -423,7 +385,7 @@ class ASRModel(torch.nn.Module):
         lm: Optional[torch.nn.Module]=None,
         lm_weight: float=0,
         autoregressive: bool = True,
-        char_dict: dict = {}
+        token2char: dict = {}
     ) -> List[int]:
         """ Apply attention rescoring decoding, CTC prefix beam search
             is applied first to get nbest, then we resoring the nbest on
@@ -498,7 +460,7 @@ class ASRModel(torch.nn.Module):
                 score += decoder_out[i][j][w]
                 if lm_weight>0 and isinstance(lm,torch.nn.Module):
                     lm_score += lm_output[i][j][w]
-                content.append(char_dict[w])
+                content.append(token2char[w])
             score += decoder_out[i][len(hyp[0])][self.eos]
 
             if lm_weight > 0 and not isinstance(lm,torch.nn.Module):

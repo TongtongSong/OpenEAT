@@ -59,6 +59,7 @@ class EncoderLayer(nn.Module):
         self.norm_ff = nn.LayerNorm(size, eps=1e-12)  # for the FNN module
         self.dropout = nn.Dropout(dropout_rate)
         self.norm_final = nn.LayerNorm(size, eps=1e-12)  # for the final output of the block
+        
     def forward(
         self,
         x: torch.Tensor,

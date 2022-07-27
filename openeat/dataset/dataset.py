@@ -32,7 +32,7 @@ from openeat.dataset.audio_processor import _speed_perturb
 from openeat.dataset.feature_processor import (_normalization, 
                                      _spec_augmentation, _spec_substitute)
 
-from openeat.dataset.text_processor import _tokenizer
+from openeat.dataset.text_processor import _remove_punctuation, _tokenizer
 
 from openeat.utils.common import IGNORE_ID
 
@@ -44,7 +44,7 @@ def _extract_feature(batch, feature_extraction_conf):
     Returns:
         (keys, feats, labels)
     """
-    speed_perturb = feature_extraction_conf.get('speed_perturb', False)
+    speed_perturb_rate = feature_extraction_conf.get('speed_perturb_rate', 0.5)
     speeds = feature_extraction_conf.get('speeds', None)
     keys = []
     feats = []
@@ -80,7 +80,7 @@ def _extract_feature(batch, feature_extraction_conf):
                     orig_freq=sample_rate, new_freq=resample_rate)(waveform)
                 sample_rate = resample_rate
             
-            if speed_perturb:
+            if random.random() < speed_perturb_rate:
                 waveform = _speed_perturb(waveform,sample_rate,speeds)
 
             mat = kaldi.fbank(
@@ -172,23 +172,23 @@ class audio_collate_func(object):
         self.feature_extraction_conf = feature_extraction_conf
 
     def __call__(self, batch):
-        assert (len(batch) == 1)
+        if len(batch) == 1:
+            batch = batch[0]
         if self.raw_wav:
-            keys, xs, ys = _extract_feature(batch[0],self.feature_extraction_conf)
+            keys, xs, ys = _extract_feature(batch,self.feature_extraction_conf)
         else:
-            keys, xs, ys = _load_feature(batch[0])
+            keys, xs, ys = _load_feature(batch)
         train_flag = True
         if ys is None:
             train_flag = False
-
+        
         xs = [_normalization(x) for x in xs]
-
         # optional feature dither d ~ (-a, a) on fbank feature
         # a ~ (0, 0.5)
         if self.feature_dither != 0.0:
             a = random.uniform(0, self.feature_dither)
             xs = [x + (np.random.random_sample(x.shape) - 0.5) * a for x in xs]
-
+        
         # optinoal spec substitute
         if self.spec_sub:
             xs = [_spec_substitute(x,**self.spec_sub_conf) for i,x in enumerate(xs)]
@@ -231,29 +231,29 @@ class AudioDataset(Dataset):
     def __init__(self,
                  data_file,
                  char_dict,
-                 bpe_model=None,
-                 max_length=10240,
-                 min_length=0,
-                 token_max_length=200,
-                 token_min_length=0,
-                 batch_type='static',
-                 batch_size=1,
-                 max_frames_in_batch=0,
-                 sort=True,
+                 bpe_model = None,
+                 max_length = 10240,
+                 min_length = 0,
+                 token_max_length = 200,
+                 token_min_length = 0,
+                 batch_type = 'static',
+                 batch_size = 1,
+                 max_frames_in_batch = 0,
+                 sort=False,
                  raw_wav=True):
         """Dataset for loading audio data.
         Attributes:
             data_file: input data file
-                Plain text data file, each line contains following 7 fields,
+                Plain text data file, each line contains following 4 fields,
                 which is split by '\t':
-                    utt:utt1
-                    feat:tmp/data/file1.wav or feat:tmp/data/fbank.ark:30
-                    feat_shape: 4.95(in seconds) or feat_shape:495,80(495 is in frames)
-                    text:i love you
-            char_dict: characters dict for text to token
-            bpe_model: sentencepiece based bpe model for English text
+                    utt: utt1
+                    feat: tmp/data/file1.wav or feat:tmp/data/fbank.ark:30
+                    feat_shape: 4.95(in seconds) or feat_shape: 495,80(495 is in frames)
+                    text: i love you
+            char_dict: characters dict for changing text to token
+            bpe_model: sentencepiece based bpe model for spliting English word to bpe
             max_length: drop utterance which is greater than max_length(10ms)
-            min_length: drop utterance which is less than min_length(10ms)
+            min_length: drop utterance which is less than min_length (10ms)
             token_max_length: drop utterance which is greater than token_max_length,
                 especially when use char unit for english modeling
             token_min_length: drop utterance which is less than token_max_length
@@ -272,14 +272,14 @@ class AudioDataset(Dataset):
                 if extracted featute(e.g. by kaldi) is used, only feature-level
                 augmentation such as specaug could be used.
         """
-        assert batch_type in ['static', 'dynamic']
+        assert batch_type in ['static', 'dynamic','shuffle']
         if bpe_model is not None:
             import sentencepiece as spm
             sp = spm.SentencePieceProcessor()
             sp.load(bpe_model)
         else:
             sp = None
-        self.batch_size = batch_size if batch_type == 'static' else 1
+        self.batch_size = 1 if batch_type in ['static', 'dynamic'] else batch_size
         self.char_dict = char_dict
         self.vocab_size = len(char_dict)
         data = []
@@ -291,7 +291,8 @@ class AudioDataset(Dataset):
                     continue
                 key = arr[0].split(':')[1]
                 text = arr[3].split(':')[1]
-                tokens = _tokenizer(sp, text, char_dict)
+                text = _remove_punctuation(text)
+                tokens = _tokenizer(text, sp, char_dict)
                 tokenid = [char_dict[w] if w in char_dict else char_dict['<unk>'] for w in tokens]
                 if raw_wav:
                     path = ':'.join(arr[1].split(':')[1:])
@@ -304,44 +305,49 @@ class AudioDataset(Dataset):
                     self.input_size = feat_dim
                 length = num_frames
                 token_length = len(tokenid)
-                if min_length <= length <= max_length:
+                if min_length < length < max_length and token_min_length < token_length < token_max_length:
                     data.append((key, path, num_frames, tokenid))
         if sort:
             data = sorted(data, key=lambda x: x[2])
+        
+        num_data = len(data)
         # Dynamic batch size
         if batch_type == 'dynamic':
             assert (max_frames_in_batch > 0)
-            num_data = len(data)
-            self.minibatch = []
-            self.minibatch.append([])
+            self.data = []
+            self.data.append([])
             num_frames_in_batch = 0
             for i in range(num_data):
                 length = data[i][2]
                 num_frames_in_batch += length
                 if num_frames_in_batch > max_frames_in_batch:
-                    self.minibatch.append([])
+                    self.data.append([])
                     num_frames_in_batch = length
-                self.minibatch[-1].append((data[i][0], data[i][1], data[i][3]))
+                self.data[-1].append((data[i][0], data[i][1], data[i][3]))
         
         # Static batch size
-        else:
+        elif batch_type == 'static':
             cur = 0
-            self.minibatch = []
-            num_data = len(data)
+            self.data = []
             while cur < num_data:
                 end = min(cur + batch_size, num_data)
                 item = []
                 for i in range(cur, end):
                     item.append((data[i][0], data[i][1], data[i][3]))
-                self.minibatch.append(item)
+                self.data.append(item)
                 cur = end
-        print(len(self.minibatch))
+        else:
+            self.data = []
+            for i in range(num_data):
+                self.data.append([data[i][0],data[i][1],data[i][3]])
+
+        print(len(self.data))
 
     def __len__(self):
-        return len(self.minibatch)
+        return len(self.data)
 
     def __getitem__(self, idx):
-        return self.minibatch[idx]
+        return self.data[idx]
 
 
 class text_collate_func(object):
@@ -362,8 +368,6 @@ class text_collate_func(object):
         self.autoregressive = autoregressive
 
     def __call__(self, batch):
-        assert (len(batch) == 1)
-        batch = batch[0]
         batch = sorted(batch, key=lambda x: x[2])
         keys = [data[0] for data in batch]
         if self.autoregressive:
@@ -432,56 +436,35 @@ class TextDataset(Dataset):
         Attributes::
             data_file: input data file
                 Plain text data file, each line contains following 7 fields,
-            token_max_length: drop utterance which is greater than token_max_length,
+            max_length: drop utterance which is greater than token_max_length,
                 especially when use char unit for english modeling
-            token_min_length: drop utterance which is less than token_max_length
+            min_length: drop utterance which is less than token_max_length
         """
         self.batch_size= batch_size
         self.input_size = -1
+        if bpe_model is not None:
+            import sentencepiece as spm
+            sp = spm.SentencePieceProcessor()
+            sp.load(bpe_model)
+        else:
+            sp = None
         self.vocab_size = len(char_dict)
 
-        data = []
+        self.data = []
         with codecs.open(text_file,'r',encoding='utf-8') as f:
             for line in f.readlines():
                 line = line.strip().split()
                 key = line[0]
-                target = [char_dict[char] if char in char_dict.keys() else 1 for char in line[1:]]
+                text = _remove_punctuation(' '.join(line[1:]))
+                tokens = _tokenizer(text, sp, char_dict)
+                target = [char_dict[char] if char in char_dict.keys() else 1 for char in tokens]
                 target_length = len(target)
                 if target_length > min_length and target_length < max_length:
-                    data.append((key, target, target_length))
+                    self.data.append([key, target, target_length])
         
-        if sort:
-            data = sorted(data, key=lambda x: x[2])
-        # Dynamic batch size
-        if batch_type == 'dynamic':
-            assert (max_tokens_in_batch > 0)
-            num_data = len(data)
-            self.minibatch = []
-            self.minibatch.append([])
-            num_tokens_in_batch = 0
-            for i in range(num_data):
-                length = data[i][2]
-                num_tokens_in_batch += length
-                if num_tokens_in_batch > max_tokens_in_batch:
-                    self.minibatch.append([])
-                    num_tokens_in_batch = length
-                self.minibatch[-1].append(data[i])
-        
-        # Static batch size
-        else:
-            cur = 0
-            self.minibatch = []
-            num_data = len(data)
-            while cur < num_data:
-                end = min(cur + batch_size, num_data)
-                item = []
-                for i in range(cur, end):
-                    item.append(data)
-                self.minibatch.append(item)
-                cur = end
     def __len__(self):
-        return len(self.minibatch)
+        return len(self.data)
 
     def __getitem__(self, idx):
-        return self.minibatch[idx]
+        return self.data[idx]
 

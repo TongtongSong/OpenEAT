@@ -3,8 +3,8 @@ import numpy as np
 
 SPEC_MASK=0
 def _normalization(feature):
-    mean = np.mean(feature,axis=0)
-    std = np.std(feature,axis=0)
+    mean = np.mean(feature, axis=0)
+    std = np.std(feature, axis=0)
     return (feature - mean) / std
 
 def _spec_augmentation(x,

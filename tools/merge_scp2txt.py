@@ -3,7 +3,7 @@
 
 from __future__ import print_function
 from __future__ import unicode_literals
-
+import numpy as np
 import argparse
 import codecs
 from distutils.util import strtobool
@@ -117,32 +117,34 @@ if __name__ == '__main__':
     fields = ['feat', 'feat_shape', 'text']
     fids = [open(f, 'r', encoding='utf-8') for f in files]
 
+    # the file with the minimum number of lines in the first
+
     if args.out is None:
         out = sys.stdout
     else:
         out = open(args.out, 'w', encoding='utf-8')
+
     # merage by least file's uttid
-    """
-    data={}
-    least_num_idx=-1
-    least_num=float('inf')
-    for i, fid in enumerate(fids):
-        data[i] = {}
-        lines = fid.readlines()
-        if len(lines) < least_num:
-            least_num = len(lines)
-            least_num_idx = i
-        for line in lines:
-            arr = line.strip().split()
-            content = ' '.join(arr[1:])
-            data[i][arr[0]] = content
-    for idx, key in enumerate(data[least_num_idx].keys()):
-        out.write('utt:{}'.format(key))
-        for i, t in enumerate(fields):
-            out.write('\t')
-            out.write('{}:{}'.format(fields[i], data[i][key]))
-        out.write('\n')
-    """
+    # data={}
+    # least_num_idx=-1
+    # least_num=float('inf')
+    # for i, fid in enumerate(fids):
+    #     data[i] = {}
+    #     lines = fid.readlines()
+    #     if len(lines) < least_num:
+    #         least_num = len(lines)
+    #         least_num_idx = i
+    #     for line in lines:
+    #         arr = line.strip().split()
+    #         content = ' '.join(arr[1:])
+    #         data[i][arr[0]] = content
+    # for idx, key in enumerate(data[least_num_idx].keys()):
+    #     out.write('utt:{}'.format(key))
+    #     for i, t in enumerate(fields):
+    #         out.write('\t')
+    #         out.write('{}:{}'.format(fields[i], data[i][key]))
+    #     out.write('\n')
+
     # merage by line
     done = False
     while not done:

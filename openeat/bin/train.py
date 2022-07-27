@@ -67,7 +67,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_workers', type=int,
                         default=1)
     parser.add_argument("--init_mods",
-                    default="embed.,encoder.,ctc.,decoder.",
+                    default="encoder.,ctc.,decoder.",
                     type=lambda s: [str(mod) for mod in s.split(",") if s != ""],
                     help="List of encoder modules \
                     to initialize ,separated by a comma")
@@ -111,7 +111,7 @@ if __name__ == '__main__':
                                 **cv_dataset_conf)
         cv_collate_conf = copy.deepcopy(collate_conf)
         # no augmenation on cv set
-        cv_collate_conf['feature_extraction_conf']['speed_perturb'] =False
+        cv_collate_conf['feature_extraction_conf']['speed_perturb_rate'] = 0
         cv_collate_conf['feature_extraction_conf']['wav_dither'] = 0.0
         cv_collate_conf['feature_dither'] = 0
         cv_collate_conf['spec_sub'] = False
@@ -154,9 +154,6 @@ if __name__ == '__main__':
         device = torch.device('cuda' if use_cuda else 'cpu')
         model = model.to(device)
 
-    optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), 
-                            **configs['optim_conf'])
-    scheduler = WarmupLR(optimizer, **configs['scheduler_conf'])
 
     step = 0
     start_epoch = 0
@@ -167,8 +164,9 @@ if __name__ == '__main__':
             start_epoch = info['epoch']+1
     
     # freeze backbone for training adapters
-    adapter = configs['model_conf'].get('adapter', False)
-    if adapter:
+    encoder_adapter = configs['model_conf'].get('encoder_use_adapter', False)
+    decoder_adapter = configs['model_conf'].get('decoder_use_adapter', False)
+    if encoder_adapter or decoder_adapter:
         for name, param in model.named_parameters():
             if "adapter" not in name:
                 param.requires_grad = False
@@ -176,6 +174,9 @@ if __name__ == '__main__':
     save_model_path = os.path.join(args.exp_dir, 'init.pt')
     save_checkpoint(model, save_model_path)
     
+    optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), 
+                            **configs['optim_conf'])
+    scheduler = WarmupLR(optimizer, len(train_data_loader)*configs['warmup_epoch'])
     executor = Executor()
     executor.step = step
     scheduler.set_step(step)
@@ -211,6 +212,8 @@ if __name__ == '__main__':
             model, save_model_path, {
                 'epoch': epoch,
                 'lr': optimizer.param_groups[0]['lr'],
+                'train_loss': train_loss,
+                'train_acc':train_acc,
                 'cv_loss': cv_loss,
                 'cv_acc': cv_acc,
                 'step': executor.step

@@ -14,7 +14,7 @@ from openeat.utils.mask import subsequent_mask, make_pad_mask
 from openeat.modules.adapter import Adapter
 from openeat.modules.label_smoothing_loss import LabelSmoothingLoss
 
-class TransformerDecoder(torch.nn.Module):
+class Decoder(torch.nn.Module):
     """Base class of Transfomer decoder module.
     Args:
         vocab_size: output dim
@@ -46,8 +46,11 @@ class TransformerDecoder(torch.nn.Module):
         adapter_layer_args = (encoder_output_size, dropout_rate, 
                              down_size, scalar)
         adapter_layer = Adapter
-        self.embedding = torch.nn.Embedding(vocab_size, attention_dim)
-        self.pos_encoding = PositionalEncoding(attention_dim)
+
+        self.embed = torch.nn.Sequential(
+                torch.nn.Embedding(vocab_size, attention_dim),
+                PositionalEncoding(attention_dim)
+        )
         self.decoders = torch.nn.ModuleList([
             DecoderLayer(
                 attention_dim,
@@ -97,8 +100,7 @@ class TransformerDecoder(torch.nn.Module):
         tgt_mask = tgt_mask & m
 
         tgt = ys_in_pad
-        x = self.embedding(tgt)
-        x, _ = self.pos_encoding(x)
+        x, _ = self.embed(tgt)
         for idx, layer in enumerate(self.decoders):
             x = layer(x, tgt_mask, memory, memory_mask)
         x = self.after_norm(x)
@@ -129,20 +131,14 @@ class TransformerDecoder(torch.nn.Module):
             y, cache: NN output value and cache per `self.decoders`.
             y.shape` is (batch, maxlen_out, token)
         """
-        x = self.embedding(tgt)
-        x, _ = self.pos_encoding(x)
+        x, _ = self.embed(tgt)
         new_cache = []
         for i, decoder in enumerate(self.decoders):
             if cache is None:
                 c = None
             else:
                 c = cache[i]
-            x, tgt_mask, memory, memory_mask= \
-                decoder(x,
-                        tgt_mask,
-                        memory,
-                        memory_mask,
-                        cache=c)
+            x= decoder(x, tgt_mask, memory,memory_mask, cache=c)
             new_cache.append(x)
 
         y = self.after_norm(x[:, -1])
@@ -179,12 +175,12 @@ class BiDecoder(torch.nn.Module):
         super().__init__()
         self.r_num_blocks = r_num_blocks
         
-        self.left_decoder = TransformerDecoder(
+        self.left_decoder = Decoder(
             vocab_size, encoder_output_size, dropout_rate,
             attention_heads, linear_units, num_blocks,r_num_blocks,
             adapter,down_size,scalar)
         if r_num_blocks > 0:
-            self.right_decoder = TransformerDecoder(
+            self.right_decoder = Decoder(
                 vocab_size,  encoder_output_size, dropout_rate,
                 attention_heads, linear_units, r_num_blocks, num_blocks,
                 adapter,down_size,scalar)

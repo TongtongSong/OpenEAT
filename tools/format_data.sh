@@ -22,8 +22,8 @@ filetype=""
 preprocess_conf=""
 out="" # If omitted, write in stdout
 help_message=$(cat << EOF
-Usage: $0 <data-dir> <dict>
-e.g. $0 data/train data/lang_1char/train_units.txt
+Usage: $0 <data-dir>
+e.g. $0 data/train
 Options:
   --nj <nj>                                        # number of parallel jobs
   --cmd (utils/run.pl|utils/queue.pl <queue opts>) # how to run jobs.
@@ -37,7 +37,7 @@ EOF
 )
 . tools/parse_options.sh
 
-if [ $# != 2 ]; then
+if [ $# != 1 ]; then
     echo "${help_message}" 1>&2
     exit 1;
 fi
@@ -45,7 +45,6 @@ fi
 set -euo pipefail
 
 dir=$1
-dic=$2
 tmpdir=$(mktemp -d ${dir}/tmp-XXXXX)
 #trap 'rm -rf ${tmpdir}' EXIT
 

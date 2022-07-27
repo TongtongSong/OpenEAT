@@ -20,7 +20,7 @@ import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_sequence
 
 from openeat.modules.embedding import PositionalEncoding
-from openeat.modules.encoder import TransformerEncoder
+from openeat.modules.encoder import Encoder
 from openeat.modules.label_smoothing_loss import LabelSmoothingLoss
 
 from openeat.utils.common import (IGNORE_ID, add_sos_eos, log_add, th_accuracy)
@@ -32,11 +32,13 @@ class LanguageModel(torch.nn.Module):
     def __init__(
         self,
         vocab_size: int,
-        encoder_num_blocks,
-        d_model: int=256,
-        attention_heads: int = 4,
-        linear_units: int = 1024,
-        dropout_rate: float=0.1,
+        pos_enc_layer_type: str='abs_pos',
+        encoder_num_blocks: int = 6,
+        activation_type: str = 'swish',
+        macaron_style: bool = False,
+        use_cnn_module: bool = False,
+        cnn_module_kernel: int = 15,
+        causal: bool = False,
         lsm_weight: float=0.1,
         length_normalized_loss: bool=False,
         ignore_id: int=IGNORE_ID,
@@ -49,13 +51,19 @@ class LanguageModel(torch.nn.Module):
         self.ignore_id = ignore_id
         self.autoregressive = autoregressive
         self.embedding = torch.nn.Embedding(vocab_size, d_model)
-        self.pos_encoding = PositionalEncoding(d_model)
-        self.encoder = TransformerEncoder(d_model,
-                                        dropout_rate,
-                                        attention_heads,
-                                        linear_units,
-                                        encoder_num_blocks)
-        self.after_norm = torch.nn.LayerNorm(d_model, eps=1e-12)
+        if pos_enc_layer_type == "abs_pos":
+            pos_enc_class = PositionalEncoding
+        elif pos_enc_layer_type == "rel_pos":
+            pos_enc_class = RelPositionalEncoding
+        elif pos_enc_layer_type == "no_pos":
+            pos_enc_class = NoPositionalEncoding
+        else:
+            raise ValueError("unknown pos_enc_layer: " + pos_enc_layer_type)
+        self.pos_encoding = pos_enc_class(d_model)
+        encoder_args = (d_model, dropout_rate, attention_heads, linear_units, 
+                        encoder_num_blocks, activation_type, 
+                        macaron_style, use_cnn_module, cnn_module_kernel)
+        self.encoder = Encoder(*encoder_args)
         self.proj_layer = torch.nn.Linear(d_model,vocab_size)
         self.criterion_att = LabelSmoothingLoss(
             size=vocab_size,
@@ -113,7 +121,6 @@ class LanguageModel(torch.nn.Module):
         xs = self.embedding(targets)
         xs, pos_emb = self.pos_encoding(xs)
         encoder_out, _ = self.encoder(xs, tgt_mask, pos_emb)
-        encoder_out = self.after_norm(encoder_out)
         encoder_out = self.proj_layer(encoder_out)
         return encoder_out
 

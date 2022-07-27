@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
+# Copyright 2021 songtongmail@163.com (Tongtong Song)
+
 set -e
 set -o pipefail
+
 AnacondaPath=/Work18/2020/songtongtong/anaconda3
 ENVIRONMENT=torch1.9_cuda11.1
 conda activate $ENVIRONMENT
@@ -8,12 +11,12 @@ conda activate $ENVIRONMENT
 export PYTHONIOENCODING=UTF-8
 export PATH=$PWD/tools:$PWD/openeat:$PWD:$AnacondaPath/envs/$ENVIRONMENT/bin/:$PATH
 export LC_ALL=C
-export CUDA_VISIBLE_DEVICES="2"
+export CUDA_VISIBLE_DEVICES="0"
 
 corpus=/Work21/2020/songtongtong/data/corpus/AISHELL-1
-data_suffix=".gpu06"
+data_suffix=".gpu05"
 stage=0
-stop_stage=0
+stop_stage=3
 
 data_stage=-3
 
@@ -26,10 +29,10 @@ nj=16
 
 # stage 0: Training
 training_stage=0
-num_workers=8
+num_workers=1
 train_set=train
 dev_set=dev
-exp_name=transformer_12_3_3_256_1024_conv2d4_speed_0.9_1.1_0.1_accum4_epoch100 # modify yourself
+exp_name=transformer_12_3_3_256_1024_wavdither1.0 # modify yourself
 train_config=conf/train.yaml
 checkpoint=
 
@@ -40,9 +43,9 @@ end=49
 
 # stage 2: Decoding
 decoding_stage=2
-decoding_num_workers=2
+decoding_num_workers=4
 recg_set="test" # modify yourself
-decode_mode="ctc_greedy_search attention_rescoring"
+decode_mode="ctc_greedy_search ctc_prefix_beam_search attention_rescoring attention"
 beam_size=10
 batch_size=1
 ctc_weight=0.5
@@ -58,7 +61,7 @@ wer_stage=3
 . tools/parse_options.sh || exit 1;
 
 exp_dir=exp/$exp_name
-decode_checkpoint=$exp_dir/avg_${average_num}.pt
+decode_checkpoint=$exp_dir/avg_${start}to${end}.pt
 
 if [ ${stage} -le ${data_stage} ] && [ ${stop_stage} -ge ${data_stage} ]; then
     echo "===== stage ${data_stage}: Prepare data ====="
@@ -83,9 +86,9 @@ if [ ${stage} -le ${formatdata_stage} ] && [ ${stop_stage} -ge ${formatdata_stag
     echo "===== stage ${formatdata_stage}: Format data ====="
     for data in test dev train;do
         tools/fix_data_dir.sh data/$data
-        tools/format_data.sh --nj ${nj} --feat-type "wav" \
-            --feat data/$data/wav.scp \
-            --raw true data/$data ${dict} > data/$data/format.data
+        tools/format_data.sh --nj ${nj} \
+            --feat-type "wav" --feat data/$data/wav.scp \
+            --raw true data/$data > data/$data/format.data
     done
     echo "===== stage ${formatdata_stage}: Format data Successfully !====="
 fi
@@ -110,7 +113,8 @@ fi
 if [ ${stage} -le ${avgm_stage} ] && [ ${stop_stage} -ge ${avgm_stage} ]; then
     echo "===== stage ${avgm_stage}: Average Model ====="
     echo "average models and final checkpoint is $decode_checkpoint"
-    python3 openeat/bin/average.py \
+    python3 openeat/bin/average_model.py \
+        --dst_model $decode_checkpoint \
         --src_path $exp_dir  \
         --start $start \
         --end $end
@@ -120,6 +124,7 @@ fi
 
 if [ ${stage} -le ${decoding_stage} ] && [ ${stop_stage} -ge ${decoding_stage} ]; then
     echo "===== stage ${decoding_stage}: Decoding ====="
+    num_gpus=$(echo $CUDA_VISIBLE_DEVICES | awk -F "," '{print NF}')
     for data in $recg_set; do
     {
         for mode in $decode_mode;do

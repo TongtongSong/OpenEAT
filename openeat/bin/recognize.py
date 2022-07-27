@@ -113,7 +113,8 @@ if __name__ == '__main__':
     with open(args.dict, 'r') as fin:
         for line in fin:
             arr = line.strip().split()
-            char_dict[int(arr[1])] = arr[0]
+            char_dict[arr[0]] = int(arr[1])
+    token2char = {v:k for k,v in char_dict.items()}
 
     configs['dataset_conf']['raw_wav'] = args.raw_wav
     configs['dataset_conf']['min_length'] = 1
@@ -127,7 +128,7 @@ if __name__ == '__main__':
                                 args.bpe_model,
                                 **dataset_conf)
     test_collate_conf = copy.deepcopy(configs['collate_conf'])
-    test_collate_conf['feature_extraction_conf']['speed_perturb'] =False
+    test_collate_conf['feature_extraction_conf']['speed_perturb_rate'] = 0
     test_collate_conf['feature_extraction_conf']['wav_dither'] = 0.0
     test_collate_conf['feature_dither'] = 0
     test_collate_conf['spec_sub'] = False
@@ -183,9 +184,7 @@ if __name__ == '__main__':
                 hyps = model.recognize(
                     features,
                     features_length,
-                    beam_size=args.beam_size,
-                    lm = lm,
-                    lm_weight=args.lm_weight)
+                    beam_size=args.beam_size)
                 hyps = [hyp.tolist() for hyp in hyps]
             elif args.mode == 'attention_rescoring':
                 assert (features.size(0) == 1)
@@ -198,7 +197,7 @@ if __name__ == '__main__':
                     lm = lm,
                     lm_weight=args.lm_weight,
                     autoregressive = autoregressive,
-                    char_dict = char_dict
+                    token2char = token2char
                 )
                 hyps = [hyps]
             elif args.mode == 'ctc_greedy_search':
@@ -214,10 +213,10 @@ if __name__ == '__main__':
                 hyps = [hyps]
             
             for i, key in enumerate(keys):
-                content = ''
+                content = []
                 for w in hyps[i]:
                     if w == eos:
                         break
-                    content += char_dict[w]
-                logger.info('{}/{}:{} {}'.format(batch_idx, total, key, content))
-                fout.write('{} {}\n'.format(key, content))
+                    content.append(token2char[w])
+                logger.info('{}/{}:{} {}'.format(batch_idx+1, total, key, ' '.join(content)))
+                fout.write('{} {}\n'.format(key,  ' '.join(content)))
