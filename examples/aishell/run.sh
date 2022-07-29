@@ -31,7 +31,7 @@ training_stage=0
 num_workers=1
 train_set=train
 dev_set=dev
-exp_name=test # modify yourself
+exp_name=test_accum4_epoch80 # modify yourself
 train_config=conf/train.yaml
 checkpoint=
 
@@ -102,8 +102,8 @@ if [ ${stage} -le ${training_stage} ] && [ ${stop_stage} -ge ${training_stage} ]
           --num_workers $num_workers \
           --config $train_config \
           --dict $dict \
-          --train_data data/$train_set/format.data${data_suffix} \
-          --cv_data data/$dev_set/format.data${data_suffix} \
+          --train_data data/$train_set/format.data \
+          --cv_data data/$dev_set/format.data \
           --exp_dir $exp_dir \
           ${checkpoint:+--checkpoint $checkpoint}
     echo "===== stage ${training_stage}: Training Successfully !====="
