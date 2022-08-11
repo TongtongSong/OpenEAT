@@ -15,16 +15,17 @@
 
 from __future__ import print_function
 
-import sys
-import argparse
-import copy
-import codecs
 import os
+import sys
 path = os.path.abspath(__file__)
 path1 = os.path.split(path)[0]
 path2 = os.path.split(path1)[0]
 path3 = os.path.split(path2)[0]
 sys.path.append(path3)
+import argparse
+import copy
+import codecs
+
 import torch
 import yaml
 from torch.utils.data import DataLoader

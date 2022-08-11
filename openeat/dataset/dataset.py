@@ -70,7 +70,10 @@ def _extract_feature(batch, feature_extraction_conf):
                     frame_offset=start_frame)
             else:
                 waveform, sample_rate = torchaudio.load(wav_path)
+            #waveform = waveform.float()
+            #print('1',waveform)
             waveform = waveform * (1 << 15)
+            #print('2',waveform)
             if 'resample' in feature_extraction_conf:
                 resample_rate = feature_extraction_conf['resample']
             else:
@@ -292,7 +295,8 @@ class AudioDataset(Dataset):
                 key = arr[0].split(':')[1]
                 text = arr[3].split(':')[1]
                 text = _remove_punctuation(text)
-                tokens = _tokenizer(text, sp, char_dict)
+                text = text.replace('UNK','#').replace('unk','#')
+                tokens = _tokenizer(text, sp)
                 tokenid = [char_dict[w] if w in char_dict else char_dict['<unk>'] for w in tokens]
                 if raw_wav:
                     path = ':'.join(arr[1].split(':')[1:])
