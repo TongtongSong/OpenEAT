@@ -1,0 +1,31 @@
+# network architecture
+model_conf:
+    d_model: 256  # dimension of attention
+    attention_heads: 4
+    linear_units: 1024  # the number of units of position-wise feed forward
+    dropout_rate: 0.1
+    length_normalized_loss: false
+    encoder_num_blocks: 6    # the number of encoder blocks
+    autoregressive: false
+
+# dataset related
+dataset_conf:
+    max_length: 200
+    min_length: 1
+    batch_type: 'dynamic'
+    batch_size: 1
+    max_tokens_in_batch: 2000
+    sort: true
+    paste: false
+
+grad_clip: 5
+accum_grad: 1
+max_epoch: 50
+log_interval: 100
+
+optim: adam
+optim_conf:
+    lr: 0.001
+scheduler: warmuplr     # pytorch v1.1.0+ required
+scheduler_conf:
+    warmup_steps: 25000
