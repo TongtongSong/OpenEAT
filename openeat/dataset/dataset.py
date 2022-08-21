@@ -28,7 +28,7 @@ import torchaudio
 torchaudio.set_audio_backend("sox_io")
 import torchaudio.compliance.kaldi as kaldi
 
-from openeat.dataset.audio_processor import _speed_perturb
+from openeat.dataset.audio_processor import _speed_generator, _speed_perturb
 from openeat.dataset.feature_processor import (_normalization, 
                                      _spec_augmentation, _spec_substitute)
 
@@ -56,12 +56,12 @@ def _extract_feature(batch, feature_extraction_conf):
             value = wav.strip().split(",")
             # 1 for general wav.scp, 3 for segmented wav.scp
             assert len(value) == 1 or len(value) == 3
-            wav_path = value[0]
+            wav_path = value[0]      
             # value length 3 means using segmented wav.scp
             # incluede .wav, start time, end time
             sample_rate = torchaudio.backend.sox_io_backend.info(
                 wav_path).sample_rate
-            if len(value) == 3:
+            if len(value) == 4:
                 start_frame = int(float(value[1]) * sample_rate)
                 end_frame = int(float(value[2]) * sample_rate)
                 waveform, sample_rate = torchaudio.load(
@@ -83,8 +83,13 @@ def _extract_feature(batch, feature_extraction_conf):
                     orig_freq=sample_rate, new_freq=resample_rate)(waveform)
                 sample_rate = resample_rate
             
+            # speed perturb
+
+            speed = x[3]
             if random.random() < speed_perturb_rate:
-                waveform = _speed_perturb(waveform,sample_rate,speeds)
+                speed = _speed_generator(speeds)
+            if speed != 1.0:
+                waveform = _speed_perturb(waveform,sample_rate,speed)
 
             mat = kaldi.fbank(
                 waveform,
@@ -242,8 +247,10 @@ class AudioDataset(Dataset):
                  batch_type = 'static',
                  batch_size = 1,
                  max_frames_in_batch = 0,
-                 sort=False,
-                 raw_wav=True):
+                 sort = False,
+                 speed_perturb = False,
+                 speeds = [0.9, 1.1, 0.1],
+                 raw_wav = True):
         """Dataset for loading audio data.
         Attributes:
             data_file: input data file
@@ -285,6 +292,10 @@ class AudioDataset(Dataset):
         self.batch_size = 1 if batch_type in ['static', 'dynamic'] else batch_size
         self.char_dict = char_dict
         self.vocab_size = len(char_dict)
+        if speed_perturb:
+            speed_list = [float(s) for s in np.arange(speeds[0],speeds[1],speeds[2])]
+        else:
+            speed_list = [1.0]
         data = []
         # Open in utf8 mode since meet encoding problem
         with codecs.open(data_file, 'r', encoding='utf-8') as f:
@@ -295,7 +306,7 @@ class AudioDataset(Dataset):
                 key = arr[0].split(':')[1]
                 text = arr[3].split(':')[1]
                 text = _remove_punctuation(text)
-                text = text.replace('UNK','#').replace('unk','#')
+                text = text.replace(' UNK ',' # ').replace(' unk ',' # ')
                 tokens = _tokenizer(text, sp)
                 tokenid = [char_dict[w] if w in char_dict else char_dict['<unk>'] for w in tokens]
                 if raw_wav:
@@ -310,7 +321,9 @@ class AudioDataset(Dataset):
                 length = num_frames
                 token_length = len(tokenid)
                 if min_length < length < max_length and token_min_length < token_length < token_max_length:
-                    data.append((key, path, num_frames, tokenid))
+                    for speed in speed_list:
+                        num_frames *= speed 
+                        data.append((key+str(speed), path, num_frames, tokenid, speed))
         if sort:
             data = sorted(data, key=lambda x: x[2])
         
@@ -327,7 +340,7 @@ class AudioDataset(Dataset):
                 if num_frames_in_batch > max_frames_in_batch:
                     self.data.append([])
                     num_frames_in_batch = length
-                self.data[-1].append((data[i][0], data[i][1], data[i][3]))
+                self.data[-1].append((data[i][0], data[i][1], data[i][3], data[i][4]))
         
         # Static batch size
         elif batch_type == 'static':
@@ -337,13 +350,13 @@ class AudioDataset(Dataset):
                 end = min(cur + batch_size, num_data)
                 item = []
                 for i in range(cur, end):
-                    item.append((data[i][0], data[i][1], data[i][3]))
+                    item.append((data[i][0], data[i][1], data[i][3], data[i][4]))
                 self.data.append(item)
                 cur = end
         else:
             self.data = []
             for i in range(num_data):
-                self.data.append([data[i][0],data[i][1],data[i][3]])
+                self.data.append([data[i][0],data[i][1],data[i][3],data[i][4]])
 
         print(len(self.data))
 

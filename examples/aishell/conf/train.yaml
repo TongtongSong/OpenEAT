@@ -7,12 +7,12 @@ model_conf:
     length_normalized_loss: false
     # encoder related
     input_layer: 'conv2d'
-    pos_enc_layer_type: 'abs_pos' # rel_pos is for conformer
+    pos_enc_layer_type: 'rel_pos' # rel_pos is for conformer
     encoder_num_blocks: 12   # the number of encoder blocks
 
     # conformer config
-    macaron_style: false # true is for conformer
-    use_cnn_module: false # true is for conformer
+    macaron_style: true # true is for conformer
+    use_cnn_module: true # true is for conformer
     cnn_module_kernel: 15
     
     # adapter config
@@ -35,8 +35,9 @@ collate_conf:
     # spec level config
     feature_extraction_conf:
         resample_rate: 16000
+        # online speed perturb conf
         speed_perturb_rate: 0
-        speeds: [0.9, 1.1, 0] # [start, end, interval]
+        speeds: [0.9, 1.1, 0.1] # [start, end, interval]
         wav_dither: 0.0
         mel_bins: 80
     feature_dither: 0.0 # add dither [-feature_dither,feature_dither] on fbank feature
@@ -53,22 +54,24 @@ collate_conf:
 
 # dataset related
 dataset_conf:
+    # offline speed perturb conf
+    speed_perturb: True
+    speeds: [0.9, 1.1, 0.1]
     max_length: 2000
     min_length: 10
     batch_type: 'dynamic' # dynamic or static, shuffle
     max_frames_in_batch: 10000 # if dynamic
     batch_size: 12 # if staticd
-    sort: false
+    sort: true
     raw_wav: true
 
 grad_clip: 5
 accum_grad: 1
-max_epoch: 50
+max_epoch: 100
 log_interval: 100
 
 optim: adam
 optim_conf:
     lr: 0.001
 scheduler: warmuplr     # pytorch v1.1.0+ required
-scheduler_conf:
-    warmup_steps: 25000
+warmup_epoch: 10

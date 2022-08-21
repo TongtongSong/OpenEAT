@@ -116,14 +116,16 @@ if __name__ == '__main__':
             arr = line.strip().split()
             char_dict[arr[0]] = int(arr[1])
     token2char = {v:k for k,v in char_dict.items()}
-
+     
     configs['dataset_conf']['raw_wav'] = args.raw_wav
     configs['dataset_conf']['min_length'] = 1
     configs['dataset_conf']['max_length'] = 100000
     dataset_conf = configs.get('dataset_conf', {})
+    dataset_conf['speed_perturb'] = False
     dataset_conf['batch_type'] = 'static'
     dataset_conf['batch_size'] = args.batch_size
     dataset_conf['sort'] = False
+    
     test_dataset = AudioDataset(args.test_data,
                                 char_dict,
                                 args.bpe_model,

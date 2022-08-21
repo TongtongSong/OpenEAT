@@ -105,6 +105,7 @@ if __name__ == '__main__':
     # cv dataset and dataloader
     if args.cv_data is not None:
         cv_dataset_conf = copy.deepcopy(dataset_conf)
+        cv_dataset_conf['speed_perturb'] = False
         cv_dataset = AudioDataset(args.cv_data,
                                 char_dict,
                                 args.bpe_model,
