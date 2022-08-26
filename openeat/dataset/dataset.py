@@ -61,7 +61,7 @@ def _extract_feature(batch, feature_extraction_conf):
             # incluede .wav, start time, end time
             sample_rate = torchaudio.backend.sox_io_backend.info(
                 wav_path).sample_rate
-            if len(value) == 4:
+            if len(value) == 3:
                 start_frame = int(float(value[1]) * sample_rate)
                 end_frame = int(float(value[2]) * sample_rate)
                 waveform, sample_rate = torchaudio.load(
