@@ -7,6 +7,8 @@ Open source end-to-end ASR toolkit (OpenEAT) for research and competition.
 - Processing text online
 - Adapter for fine-tuning
 - Multi-threaded decoding
+- speed perturb online like kaldi
+- support wenet pre-trained model decoding
 
 # Acknowledge
 1. We basically make modifications on [wenet](https://github.com/wenet-e2e/wenet).
