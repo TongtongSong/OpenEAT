@@ -74,8 +74,8 @@ def _extract_feature(batch, feature_extraction_conf):
             #print('1',waveform)
             waveform = waveform * (1 << 15)
             #print('2',waveform)
-            if 'resample' in feature_extraction_conf:
-                resample_rate = feature_extraction_conf['resample']
+            if 'resample_rate' in feature_extraction_conf:
+                resample_rate = feature_extraction_conf['resample_rate']
             else:
                 resample_rate = sample_rate
             if resample_rate != sample_rate:
@@ -163,7 +163,8 @@ class audio_collate_func(object):
         spec_sub=False,
         spec_sub_conf=None,
         raw_wav=True,
-        feature_extraction_conf=None
+        feature_extraction_conf=None,
+        normalization=True
     ):
         """
         Args:
@@ -178,6 +179,8 @@ class audio_collate_func(object):
         self.spec_aug_conf = spec_aug_conf
         self.raw_wav = raw_wav
         self.feature_extraction_conf = feature_extraction_conf
+        self.normalization = normalization
+
 
     def __call__(self, batch):
         if len(batch) == 1:
@@ -189,8 +192,8 @@ class audio_collate_func(object):
         train_flag = True
         if ys is None:
             train_flag = False
-        
-        xs = [_normalization(x) for x in xs]
+        if self.normalization:
+            xs = [_normalization(x) for x in xs]
         # optional feature dither d ~ (-a, a) on fbank feature
         # a ~ (0, 0.5)
         if self.feature_dither != 0.0:
@@ -323,7 +326,7 @@ class AudioDataset(Dataset):
                 if min_length < length < max_length and token_min_length < token_length < token_max_length:
                     for speed in speed_list:
                         num_frames *= speed 
-                        data.append((key+str(speed), path, num_frames, tokenid, speed))
+                        data.append((key, path, num_frames, tokenid, speed))
         if sort:
             data = sorted(data, key=lambda x: x[2])
         

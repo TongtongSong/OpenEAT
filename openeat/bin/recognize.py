@@ -25,6 +25,7 @@ sys.path.append(path3)
 import argparse
 import copy
 import codecs
+import numpy
 
 import torch
 import yaml
@@ -33,7 +34,7 @@ from torch.utils.data import DataLoader
 from openeat.dataset.dataset import AudioDataset, audio_collate_func
 from openeat.utils.checkpoint import load_checkpoint
 from openeat.utils.common import init_logger, map_to_device
-from openeat.models.asr_model import ASRModel
+
 
 from openeat.models.language_model import LanguageModel
 import kenlm
@@ -43,6 +44,9 @@ if __name__ == '__main__':
     parser.add_argument('--config',
                         required=True,
                         help='config file')
+    parser.add_argument('--model',
+                        help='wenet or openeat',
+                        default='openeat')
     parser.add_argument('--test_data',
                         required=True,
                         help='test data file')
@@ -69,7 +73,7 @@ if __name__ == '__main__':
                         default=None,
                         help='language model config')
     parser.add_argument('--lm_weight',type=float,
-                        default=0.1,
+                        default=0.0,
                         help='language model weight for rescoring')
     parser.add_argument('--dict',
                         required=True,
@@ -149,7 +153,13 @@ if __name__ == '__main__':
     device = torch.device('cuda' if use_cuda else 'cpu')
 
     # ASR Model
-    model = ASRModel(**configs['model_conf'])
+    if args.model == 'wenet':
+        from wenet.transformer.asr_model import init_asr_model
+        model = init_asr_model(configs['model_conf'])
+    else:
+        from openeat.models.asr_model import ASRModel
+        model = ASRModel(**configs['model_conf'])
+    
     # logger.info('{}'.format(model))
     num_params = sum(p.numel() for p in model.parameters())
     logger.info('The number of model params: {}'.format(num_params))
@@ -191,16 +201,16 @@ if __name__ == '__main__':
                 hyps = [hyp.tolist() for hyp in hyps]
             elif args.mode == 'attention_rescoring':
                 assert (features.size(0) == 1)
-                hyps = model.attention_rescoring(
+                hyps, encoder_out, decoder_out = model.attention_rescoring(
                     features,
                     features_length,
                     beam_size=args.beam_size,
                     ctc_weight = args.ctc_weight,
                     reverse_weight = args.reverse_weight,
-                    lm = lm,
-                    lm_weight=args.lm_weight,
-                    autoregressive = autoregressive,
-                    token2char = token2char
+                    # lm = lm,
+                    # lm_weight=args.lm_weight,
+                    # autoregressive = autoregressive,
+                    # token2char = token2char
                 )
                 hyps = [hyps]
             elif args.mode == 'ctc_greedy_search':
@@ -214,8 +224,9 @@ if __name__ == '__main__':
                     features_length,
                     beam_size=args.beam_size)
                 hyps = [hyps]
-            
             for i, key in enumerate(keys):
+                numpy.savetxt(os.path.join(os.path.dirname(args.result_file),'encoder/'+key+'.txt'),encoder_out[i].cpu().numpy())
+                numpy.savetxt(os.path.join(os.path.dirname(args.result_file),'decoder/'+key+'.txt'),decoder_out[i].cpu().numpy())
                 content = []
                 for w in hyps[i]:
                     if w == eos:

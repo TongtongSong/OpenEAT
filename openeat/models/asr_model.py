@@ -143,7 +143,7 @@ class ASRModel(torch.nn.Module):
             r_ys_in_pad, r_ys_out_pad = add_sos_eos(r_ys_pad, self.sos, self.eos,
                                                     self.ignore_id)
         # 1. Forward decoder
-        decoder_out,  _, r_decoder_out = self.decoder(encoder_out, encoder_mask,
+        decoder_out, r_decoder_out, _ = self.decoder(encoder_out, encoder_mask,
                                                      ys_in_pad, ys_in_lens,
                                                      r_ys_in_pad,
                                                      self.reverse_weight)
@@ -213,7 +213,7 @@ class ASRModel(torch.nn.Module):
             hyps_mask = subsequent_mask(i).unsqueeze(0).repeat(
                 running_size, 1, 1).to(device)  # (B*N, i, i)
             # logp: (B*N, vocab)
-            p, cache,_ = self.decoder.forward_one_step(
+            p, cache, _ = self.decoder.forward_one_step(
                 encoder_out, encoder_mask, hyps, hyps_mask, cache=cache)
             logp = torch.nn.functional.log_softmax(p,dim=-1)
             # 2.2 First beam prune: select topk best prob at current time
@@ -386,7 +386,7 @@ class ASRModel(torch.nn.Module):
         lm_weight: float=0,
         autoregressive: bool = True,
         token2char: dict = {}
-    ) -> List[int]:
+    ) -> Tuple[List[int],torch.Tensor,torch.Tensor]:
         """ Apply attention rescoring decoding, CTC prefix beam search
             is applied first to get nbest, then we resoring the nbest on
             attention decoder with corresponding encoder out
@@ -428,7 +428,7 @@ class ASRModel(torch.nn.Module):
         r_hyps_pad = reverse_pad_list(ori_hyps_pad, hyps_lens, self.ignore_id)
         r_hyps_pad, _ = add_sos_eos(r_hyps_pad, self.sos, self.eos,
                                     self.ignore_id)
-        decoder_out, _, r_decoder_out = self.decoder(
+        decoder_out, r_decoder_out, pre_decoder_out = self.decoder(
             encoder_out, encoder_mask, hyps_pad, hyps_lens, r_hyps_pad,
             reverse_weight)  # (beam_size, max_hyps_len, vocab_size)
 
@@ -482,4 +482,4 @@ class ASRModel(torch.nn.Module):
                 best_score = score
                 best_index = i
         
-        return hyps[best_index][0]
+        return hyps[best_index][0], encoder_out, pre_decoder_out

@@ -212,13 +212,13 @@ class BiDecoder(torch.nn.Module):
                     if use_output_layer is True,
                 olens: (batch, )
         """
-        l_x, olens, _ = self.left_decoder(memory, memory_mask, ys_in_pad,
+        l_x, olens, pre_l_x = self.left_decoder(memory, memory_mask, ys_in_pad,
                                           ys_in_lens)
         r_x = torch.tensor(0.0)
         if self.r_num_blocks:
             r_x, olens, _ = self.right_decoder(memory, memory_mask, 
                              r_ys_in_pad, ys_in_lens)
-        return l_x, olens, r_x
+        return l_x, r_x, pre_l_x
 
     def forward_one_step(
         self,
