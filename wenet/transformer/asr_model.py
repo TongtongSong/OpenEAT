@@ -72,10 +72,10 @@ class ASRModel(torch.nn.Module):
 
     def forward(
         self,
-        speech: torch.Tensor,
-        speech_lengths: torch.Tensor,
-        text: torch.Tensor,
-        text_lengths: torch.Tensor,
+        features: torch.Tensor,
+        features_length: torch.Tensor,
+        targets: torch.Tensor,
+        targets_length: torch.Tensor,
     ) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor],
                Optional[torch.Tensor]]:
         """Frontend + Encoder + Decoder + Calc loss
@@ -86,26 +86,26 @@ class ASRModel(torch.nn.Module):
             text: (Batch, Length)
             text_lengths: (Batch,)
         """
-        assert text_lengths.dim() == 1, text_lengths.shape
+        assert targets_length.dim() == 1, targets_length.shape
         # Check that batch_size is unified
-        assert (speech.shape[0] == speech_lengths.shape[0] == text.shape[0] ==
-                text_lengths.shape[0]), (speech.shape, speech_lengths.shape,
-                                         text.shape, text_lengths.shape)
+        assert (features.shape[0] == features_length.shape[0] == targets.shape[0] ==
+                targets_length.shape[0]), (features.shape, features_length.shape,
+                                         targets.shape, targets_length.shape)
         # 1. Encoder
-        encoder_out, encoder_mask = self.encoder(speech, speech_lengths)
+        encoder_out, encoder_mask = self.encoder(features, features_length)
         encoder_out_lens = encoder_mask.squeeze(1).sum(1)
 
         # 2a. Attention-decoder branch
         if self.ctc_weight != 1.0:
             loss_att, acc_att = self._calc_att_loss(encoder_out, encoder_mask,
-                                                    text, text_lengths)
+                                                    targets, targets_length)
         else:
             loss_att = None
 
         # 2b. CTC branch
         if self.ctc_weight != 0.0:
-            loss_ctc = self.ctc(encoder_out, encoder_out_lens, text,
-                                text_lengths)
+            loss_ctc = self.ctc(encoder_out, encoder_out_lens, targets,
+                                targets_length)
         else:
             loss_ctc = None
 
@@ -116,7 +116,7 @@ class ASRModel(torch.nn.Module):
         else:
             loss = self.ctc_weight * loss_ctc + (1 -
                                                  self.ctc_weight) * loss_att
-        return loss, loss_att, loss_ctc
+        return loss, acc_att
 
     def _calc_att_loss(
         self,
@@ -489,7 +489,6 @@ class ASRModel(torch.nn.Module):
         hyps, encoder_out = self._ctc_prefix_beam_search(
             speech, speech_lengths, beam_size, decoding_chunk_size,
             num_decoding_left_chunks, simulate_streaming)
-
         assert len(hyps) == beam_size
         hyps_pad = pad_sequence([
             torch.tensor(hyp[0], device=device, dtype=torch.long)

@@ -147,7 +147,7 @@ def th_accuracy(pad_outputs: torch.Tensor, pad_targets: torch.Tensor,
     numerator = torch.sum(
         pad_pred.masked_select(mask) == pad_targets.masked_select(mask))
     denominator = torch.sum(mask)
-    return float(numerator) / float(denominator)
+    return numerator / denominator
 
 
 def get_activation(act):

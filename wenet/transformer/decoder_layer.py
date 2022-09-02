@@ -62,12 +62,8 @@ class DecoderLayer(nn.Module):
         self.dropout = nn.Dropout(dropout_rate)
         self.normalize_before = normalize_before
         self.concat_after = concat_after
-        if self.concat_after:
-            self.concat_linear1 = nn.Linear(size + size, size)
-            self.concat_linear2 = nn.Linear(size + size, size)
-        else:
-            self.concat_linear1 = nn.Identity()
-            self.concat_linear2 = nn.Identity()
+        self.concat_linear1 = nn.Linear(size + size, size)
+        self.concat_linear2 = nn.Linear(size + size, size)
 
     def forward(
         self,

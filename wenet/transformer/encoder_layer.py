@@ -61,10 +61,8 @@ class TransformerEncoderLayer(nn.Module):
         self.size = size
         self.normalize_before = normalize_before
         self.concat_after = concat_after
-        if concat_after:
-            self.concat_linear = nn.Linear(size + size, size)
-        else:
-            self.concat_linear = nn.Identity()
+        self.concat_linear = nn.Linear(size + size, size)
+
 
     def forward(
         self,
@@ -179,10 +177,8 @@ class ConformerEncoderLayer(nn.Module):
         self.size = size
         self.normalize_before = normalize_before
         self.concat_after = concat_after
-        if self.concat_after:
-            self.concat_linear = nn.Linear(size + size, size)
-        else:
-            self.concat_linear = nn.Identity()
+        self.concat_linear = nn.Linear(size + size, size)
+
 
 
     def forward(

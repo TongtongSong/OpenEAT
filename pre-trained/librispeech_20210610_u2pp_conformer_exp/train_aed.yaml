@@ -1,37 +1,38 @@
 model_conf:
   input_dim: 80
-  output_dim: 4999
+  output_dim: 5002
   is_json_cmvn: true
-  cmvn_file: /Work21/2020/songtongtong/OpenEAT/pre-trained/gigaspeech_20210728_u2pp_conformer_exp/global_cmvn
-  decoder_type: bitransformer
+  cmvn_file: ../../pre-trained/librispeech_20210610_u2pp_conformer_exp/global_cmvn
+  decoder: bitransformer
   decoder_conf:
-    attention_heads: 8
+    attention_heads: 4
     dropout_rate: 0.1
     linear_units: 2048
     num_blocks: 3
     positional_dropout_rate: 0.1
     r_num_blocks: 3
-    self_attention_dropout_rate: 0.0
-    src_attention_dropout_rate: 0.0
-  encoder_type: conformer
+    self_attention_dropout_rate: 0.1
+    src_attention_dropout_rate: 0.1
+  encoder: conformer
   encoder_conf:
     activation_type: swish
-    attention_dropout_rate: 0.0
-    attention_heads: 8
+    attention_dropout_rate: 0.1
+    attention_heads: 4
     causal: true
-    cnn_module_kernel: 31
+    cnn_module_kernel: 15
     cnn_module_norm: layer_norm
     dropout_rate: 0.1
-    input_layer: conv2d6
+    input_layer: conv2d
     linear_units: 2048
     normalize_before: true
     num_blocks: 12
-    output_size: 512
+    output_size: 256
     pos_enc_layer_type: rel_pos
     positional_dropout_rate: 0.1
     selfattention_layer_type: rel_selfattn
     use_cnn_module: true
-    use_dynamic_chunk: false
+    use_dynamic_chunk: true
+    use_dynamic_left_chunk: false
   model_conf:
     ctc_weight: 0.3
     length_normalized_loss: false
@@ -40,26 +41,26 @@ model_conf:
 
 # feature extraction
 collate_conf:
-  # spec level config
-  feature_extraction_conf:
-      resample_rate: 16000
-      # online speed perturb conf
-      speed_perturb_rate: 0 # must be 0 if kaldi
-      speeds: [0.9, 1.1, 0.1] # [start, end, interval]
-      wav_dither: 0.0
-      mel_bins: 80
-  feature_dither: 0.0 # add dither [-feature_dither,feature_dither] on fbank feature
-  spec_sub: false
-  spec_sub_conf:
-      num_t_sub: 3
-      max_t: 30
-  spec_aug: true
-  spec_aug_conf:
-      num_t_mask: 3
-      num_f_mask: 2
-      max_t: 50
-      max_f: 10
-
+    # spec level config
+    feature_extraction_conf:
+        resample_rate: 16000
+        # online speed perturb conf
+        speed_perturb_rate: 0 # must be 0 if kaldi
+        speeds: [0.9, 1.1, 0.1] # [start, end, interval]
+        wav_dither: 0.0
+        mel_bins: 80
+    feature_dither: 0.0 # add dither [-feature_dither,feature_dither] on fbank feature
+    spec_sub: false
+    spec_sub_conf:
+        num_t_sub: 3
+        max_t: 30
+    spec_aug: true
+    spec_aug_conf:
+        num_t_mask: 3
+        num_f_mask: 2
+        max_t: 50
+        max_f: 10
+  
 # dataset related
 dataset_conf:
     # offline speed perturb conf
@@ -83,3 +84,4 @@ optim_conf:
     lr: 0.001
 scheduler: warmuplr     # pytorch v1.1.0+ required
 warmup_epoch: 10
+
