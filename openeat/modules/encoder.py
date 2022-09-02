@@ -67,6 +67,7 @@ class Encoder(torch.nn.Module):
         convolution_layer = ConvolutionModule
         convolution_layer_args = (d_model, cnn_module_kernel, activation,
                                   cnn_module_norm, causal)
+        
         self.encoders = torch.nn.ModuleList([
             EncoderLayer(
                 d_model,
@@ -80,6 +81,7 @@ class Encoder(torch.nn.Module):
                 dropout_rate
             ) for _ in range(encoder_num_blocks)
         ])
+        self.after_norm = torch.nn.LayerNorm(d_model, eps=1e-5)
     def output_size(self) -> int:
         return self._output_size
 
@@ -99,6 +101,7 @@ class Encoder(torch.nn.Module):
         """
         for idx,layer in enumerate(self.encoders):
             xs = layer(xs, mask, pos_emb)
+        xs = self.after_norm(xs)
         return xs, mask
         
 
@@ -106,6 +109,7 @@ class TransformerEncoder(torch.nn.Module):
     def __init__(
         self,
         input_size: int,
+        global_cmvn: torch.nn.Module = None,
         input_layer: str='conv2d',
         pos_enc_layer_type: str='abs_pos',
         d_model: int = 256,
@@ -117,10 +121,10 @@ class TransformerEncoder(torch.nn.Module):
         macaron_style: bool = True,
         use_cnn_module: bool = True,
         cnn_module_kernel: int = 15,
+        causal: bool = False,
         encoder_use_adapter: bool = False,
         down_size: int = 64,
-        scalar: float = 0.1,
-        causal: bool = False
+        scalar: float = 0.1
     ):
         """
         Args:
@@ -155,7 +159,7 @@ class TransformerEncoder(torch.nn.Module):
             pos_enc_class = NoPositionalEncoding
         else:
             raise ValueError("unknown pos_enc_layer: " + pos_enc_layer_type)
-        
+        self.global_cmvn = global_cmvn
         self.embed = subsampling_class(
             input_size,
             d_model,
@@ -193,13 +197,14 @@ class TransformerEncoder(torch.nn.Module):
                 dropout_rate
             ) for _ in range(encoder_num_blocks)
         ])
+        self.after_norm = torch.nn.LayerNorm(d_model, eps=1e-5)
     def output_size(self) -> int:
         return self._output_size
 
     def forward(
         self,
-        features: torch.Tensor,
-        features_length: torch.Tensor
+        xs: torch.Tensor,
+        xs_lens: torch.Tensor
     ) ->  torch.Tensor:
         """Embed positions in tensor.
         Args:
@@ -209,8 +214,11 @@ class TransformerEncoder(torch.nn.Module):
         Returns:
             encoder output tensor
         """
-        masks = ~make_pad_mask(features_length, features.size(1)).unsqueeze(1)  # (B, 1, T)
-        xs, masks, pos_emb = self.embed(features, masks)
+        masks = ~make_pad_mask(xs_lens, xs.size(1)).unsqueeze(1)  # (B, 1, T)
+        if self.global_cmvn is not None:
+            xs = self.global_cmvn(xs)
+        xs, masks, pos_emb = self.embed(xs, masks)
         for idx,layer in enumerate(self.encoders):
             xs = layer(xs, masks, pos_emb)
+        xs = self.after_norm(xs)
         return xs, masks

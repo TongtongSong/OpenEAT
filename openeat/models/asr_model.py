@@ -19,12 +19,13 @@ import torch
 import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_sequence
 
-
-from openeat.modules.ctc import CTC
-from openeat.modules.decoder import BiDecoder
+from openeat.modules.cmvn import GlobalCMVN
 from openeat.modules.encoder import TransformerEncoder
+from openeat.modules.decoder import BiDecoder
+from openeat.modules.ctc import CTC
 from openeat.modules.label_smoothing_loss import LabelSmoothingLoss
 
+from openeat.utils.cmvn import load_cmvn
 from openeat.utils.common import (IGNORE_ID, reverse_pad_list, add_sos_eos, log_add,
                                 remove_duplicates_and_blank, th_accuracy)
 
@@ -41,6 +42,8 @@ class ASRModel(torch.nn.Module):
         encoder_num_blocks: int,
         decoder_num_blocks: int,
         r_decoder_num_blocks: int,
+        is_json_cmvn: bool=False,
+        cmvn_file: str=None,
         input_layer: str='conv2d',
         pos_enc_layer_type: str='abs_pos',
         d_model: int=256,
@@ -51,6 +54,7 @@ class ASRModel(torch.nn.Module):
         macaron_style: bool = True,
         use_cnn_module: bool = True,
         cnn_module_kernel: int = 15,
+        casual: bool=False,
         encoder_use_adapter: bool = False,
         decoder_use_adapter: bool = False,
         down_size: int = 64,
@@ -69,11 +73,17 @@ class ASRModel(torch.nn.Module):
         self.ignore_id = ignore_id
         self.ctc_weight = ctc_weight
         self.reverse_weight = reverse_weight
-
-        encoder_args = (input_size, input_layer, pos_enc_layer_type,
+        if cmvn_file is not None:
+            mean, istd = load_cmvn(cmvn_file, is_json_cmvn)
+            global_cmvn = GlobalCMVN(
+                torch.from_numpy(mean).float(),
+                torch.from_numpy(istd).float())
+        else:
+            global_cmvn = None
+        encoder_args = (input_size, global_cmvn, input_layer, pos_enc_layer_type,
                         d_model, dropout_rate, attention_heads, linear_units, 
                         encoder_num_blocks, activation_type, 
-                        macaron_style, use_cnn_module, cnn_module_kernel,
+                        macaron_style, use_cnn_module, cnn_module_kernel, casual,
                         encoder_use_adapter, down_size, scalar)
         self.encoder = TransformerEncoder(*encoder_args)
 

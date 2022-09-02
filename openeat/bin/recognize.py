@@ -44,9 +44,6 @@ if __name__ == '__main__':
     parser.add_argument('--config',
                         required=True,
                         help='config file')
-    parser.add_argument('--model',
-                        help='wenet or openeat',
-                        default='openeat')
     parser.add_argument('--test_data',
                         required=True,
                         help='test data file')
@@ -207,10 +204,10 @@ if __name__ == '__main__':
                     beam_size=args.beam_size,
                     ctc_weight = args.ctc_weight,
                     reverse_weight = args.reverse_weight,
-                    # lm = lm,
-                    # lm_weight=args.lm_weight,
-                    # autoregressive = autoregressive,
-                    # token2char = token2char
+                    lm = lm,
+                    lm_weight=args.lm_weight,
+                    autoregressive = autoregressive,
+                    token2char = token2char
                 )
                 hyps = [hyps]
             elif args.mode == 'ctc_greedy_search':

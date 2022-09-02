@@ -57,7 +57,6 @@ class Executor:
                         acc.item(), total_acc/num_seen_utts)
                 log_str += 'lr:{:.8f}'.format(lr)
                 logger.info(log_str)
-                break
         return total_loss/num_seen_utts, total_acc/num_seen_utts
 
     def cv(self, epoch, logger, model, data_loader, device, args):
@@ -76,7 +75,6 @@ class Executor:
                 if num_utts == 0:
                     continue
                 loss,acc = model(**batch)
-                print(loss,acc)
                 loss = torch.mean(loss)
                 if acc is not None:
                     acc = torch.mean(acc)

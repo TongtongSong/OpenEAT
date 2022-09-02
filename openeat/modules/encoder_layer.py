@@ -59,7 +59,8 @@ class EncoderLayer(nn.Module):
             
         self.norm_ff = nn.LayerNorm(size, eps=1e-12)  # for the FNN module
         self.dropout = nn.Dropout(dropout_rate)
-        self.norm_final = nn.LayerNorm(size, eps=1e-12)  # for the final output of the block
+        if conv_module:
+            self.norm_final = nn.LayerNorm(size, eps=1e-12)  # for the final output of the block
         
     def forward(
         self,
@@ -106,5 +107,6 @@ class EncoderLayer(nn.Module):
         if self.adapter:
             x = x + adapt_x
             x = self.norm_adapter(x)
-        x = self.norm_final(x)
+        if self.conv_module:
+            x = self.norm_final(x)
         return x

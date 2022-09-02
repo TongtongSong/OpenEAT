@@ -112,7 +112,6 @@ def _extract_feature(batch, feature_extraction_conf):
             pass
     # Sort it because sorting is required in pack/pad operation
     
-    print(labels)
     order = np.argsort(lengths)[::-1]
     sorted_keys = [keys[i] for i in order]
     sorted_feats = [feats[i] for i in order]
@@ -332,7 +331,6 @@ class AudioDataset(Dataset):
                         data.append((key, path, num_frames, tokenid, speed))
         if sort:
             data = sorted(data, key=lambda x: x[2])
-        print(data_file)
         num_data = len(data)
         # Dynamic batch size
         if batch_type == 'dynamic':

@@ -87,7 +87,7 @@ def load_trained_modules(model: torch.nn.Module, path:str, select_modules:list):
     else:
         logging.warning("model was not found : %s", path)
 
-    model.load_state_dict(main_state_dict)
+    model.load_state_dict(main_state_dict, strict=False)
     info_path = re.sub('.pt$', '.yaml', path)
     configs = {}
     if os.path.exists(info_path):

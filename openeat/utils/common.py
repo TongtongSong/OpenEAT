@@ -23,7 +23,6 @@ def init_logger(log_file=None):
     return logger
 IGNORE_ID = -1
 
-
 def map_to_device(tensor_dict,device):
     new_tensor_dict = {}
     for key, value in tensor_dict.items():

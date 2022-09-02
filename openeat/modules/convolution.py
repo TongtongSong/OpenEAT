@@ -18,7 +18,7 @@ class ConvolutionModule(nn.Module):
                  channels: int,
                  kernel_size: int = 15,
                  activation: torch.nn.Module=nn.ReLU(),
-                 casual: bool=False):
+                 causal: bool=False):
         """Construct an ConvolutionModule object.
         Args:
             channels (int): The number of channels of conv layers.
@@ -40,7 +40,7 @@ class ConvolutionModule(nn.Module):
         #    padded with self.lorder frames on the left in forward.
         # else: it's a symmetrical convolution
         # kernel_size should be an odd number for none causal convolution
-        if casual:
+        if causal:
             padding = 0
             self.lorder = kernel_size - 1
         else:
@@ -48,6 +48,7 @@ class ConvolutionModule(nn.Module):
             assert (kernel_size - 1) % 2 == 0
             padding = (kernel_size - 1) // 2
             self.lorder = 0
+        
         self.depthwise_conv = nn.Conv1d(
             channels,
             channels,
@@ -71,7 +72,8 @@ class ConvolutionModule(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-        mask_pad: Optional[torch.Tensor] = None
+        mask_pad: torch.Tensor = torch.ones((0, 0, 0), dtype=torch.bool),
+        cache: torch.Tensor = torch.zeros((0, 0, 0)),
     ) -> Tuple[torch.Tensor]:
         """Compute convolution module.
         Args:
@@ -83,7 +85,7 @@ class ConvolutionModule(nn.Module):
         # exchange the temporal dimension and the feature dimension
         x = x.transpose(1, 2)
         # mask batch padding
-        if mask_pad is not None:
+        if mask_pad.size(2) > 0:  # time > 0
             x.masked_fill_(~mask_pad, 0.0)
         
         if self.lorder > 0:
@@ -112,7 +114,7 @@ class ConvolutionModule(nn.Module):
         x = self.pointwise_conv2(x)
         
         # mask batch padding
-        if mask_pad is not None:
+        if mask_pad.size(2) > 0:  # time > 0
             x.masked_fill_(~mask_pad, 0.0)
 
         return x.transpose(1, 2)
