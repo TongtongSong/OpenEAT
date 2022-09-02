@@ -111,6 +111,8 @@ def _extract_feature(batch, feature_extraction_conf):
             logging.warn('read utterance {} error'.format(x[0]))
             pass
     # Sort it because sorting is required in pack/pad operation
+    
+    print(labels)
     order = np.argsort(lengths)[::-1]
     sorted_keys = [keys[i] for i in order]
     sorted_feats = [feats[i] for i in order]
@@ -308,8 +310,9 @@ class AudioDataset(Dataset):
                     continue
                 key = arr[0].split(':')[1]
                 text = arr[3].split(':')[1]
+                text = text.replace('<unk>','zzzzzz')
                 text = _remove_punctuation(text)
-                text = text.replace(' UNK ',' # ').replace(' unk ',' # ')
+                text = text.replace('zzzzzz','#')
                 tokens = _tokenizer(text, sp)
                 tokenid = [char_dict[w] if w in char_dict else char_dict['<unk>'] for w in tokens]
                 if raw_wav:
@@ -329,7 +332,7 @@ class AudioDataset(Dataset):
                         data.append((key, path, num_frames, tokenid, speed))
         if sort:
             data = sorted(data, key=lambda x: x[2])
-        
+        print(data_file)
         num_data = len(data)
         # Dynamic batch size
         if batch_type == 'dynamic':

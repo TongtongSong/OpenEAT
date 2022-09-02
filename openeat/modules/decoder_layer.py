@@ -39,6 +39,7 @@ class DecoderLayer(nn.Module):
         self.src_attn = src_attn
         self.feed_forward = feed_forward
         self.adapter = adapter
+        self.norm_adapter = nn.LayerNorm(size, eps=1e-12)
         self.norm1 = nn.LayerNorm(size, eps=1e-12)
         self.norm2 = nn.LayerNorm(size, eps=1e-12)
         self.norm3 = nn.LayerNorm(size, eps=1e-12)
@@ -104,6 +105,7 @@ class DecoderLayer(nn.Module):
 
         if self.adapter:
             x = x + adapt_x
+            x = self.norm_adapter(x)
         
         if cache is not None:
             x = torch.cat([cache, x], dim=1)

@@ -9,7 +9,7 @@ def _tokenizer(text, sp):
     mix_chars = [w for w in chars if len(w.strip()) > 0]
     for ch_or_w in mix_chars:
         # ch_or_w is a single CJK charater(i.e., "你"), do nothing.
-        if pattern.fullmatch(ch_or_w) is not None or ch_or_w == '#':
+        if '#' in ch_or_w or pattern.fullmatch(ch_or_w) is not None:
             tokens.append(ch_or_w)
         # ch_or_w contains non-CJK charaters(i.e., " IT'S OKAY "),
         # encode ch_or_w using bpe_model.

@@ -119,7 +119,7 @@ class TransformerEncoder(torch.nn.Module):
         cnn_module_kernel: int = 15,
         encoder_use_adapter: bool = False,
         down_size: int = 64,
-        scalar: str = "0.1",
+        scalar: float = 0.1,
         causal: bool = False
     ):
         """

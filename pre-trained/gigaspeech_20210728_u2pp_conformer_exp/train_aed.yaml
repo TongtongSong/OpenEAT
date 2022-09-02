@@ -3,6 +3,12 @@ model_conf:
   output_dim: 4999
   is_json_cmvn: true
   cmvn_file: /Work21/2020/songtongtong/OpenEAT/pre-trained/gigaspeech_20210728_u2pp_conformer_exp/global_cmvn
+
+  encoder_use_adapter: true
+  decoder_use_adapter: true
+  down_size: 64
+  scalar: 0.1 # learnable, 0.1-1
+  
   decoder_type: bitransformer
   decoder_conf:
     attention_heads: 8
@@ -11,12 +17,12 @@ model_conf:
     num_blocks: 3
     positional_dropout_rate: 0.1
     r_num_blocks: 3
-    self_attention_dropout_rate: 0.0
-    src_attention_dropout_rate: 0.0
+    self_attention_dropout_rate: 0.1
+    src_attention_dropout_rate: 0.1
   encoder_type: conformer
   encoder_conf:
     activation_type: swish
-    attention_dropout_rate: 0.0
+    attention_dropout_rate: 0.1
     attention_heads: 8
     causal: true
     cnn_module_kernel: 31

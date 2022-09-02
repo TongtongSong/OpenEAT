@@ -48,6 +48,7 @@ class EncoderLayer(nn.Module):
         self.conv_module = conv_module
         self.feed_forward = feed_forward
         self.adapter = adapter
+        self.norm_adapter = nn.LayerNorm(size, eps=1e-12)
         self.ff_scale = 1
         if feed_forward_macaron:
             self.ff_scale = 0.5
@@ -104,5 +105,6 @@ class EncoderLayer(nn.Module):
 
         if self.adapter:
             x = x + adapt_x
+            x = self.norm_adapter(x)
         x = self.norm_final(x)
         return x

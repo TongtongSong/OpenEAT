@@ -46,7 +46,8 @@ class DecoderLayer(nn.Module):
         self_attn: nn.Module,
         src_attn: nn.Module,
         feed_forward: nn.Module,
-        dropout_rate: float,
+        adapter: Optional[torch.nn.Module]=None,
+        dropout_rate: float=0.1,
         normalize_before: bool = True,
         concat_after: bool = False,
     ):
@@ -56,6 +57,8 @@ class DecoderLayer(nn.Module):
         self.self_attn = self_attn
         self.src_attn = src_attn
         self.feed_forward = feed_forward
+        self.adapter = adapter
+        self.norm_adapter = nn.LayerNorm(size, eps=1e-5)
         self.norm1 = nn.LayerNorm(size, eps=1e-5)
         self.norm2 = nn.LayerNorm(size, eps=1e-5)
         self.norm3 = nn.LayerNorm(size, eps=1e-5)
@@ -134,12 +137,20 @@ class DecoderLayer(nn.Module):
         if not self.normalize_before:
             x = self.norm2(x)
 
+
+        if self.adapter:
+            adapt_x = self.adapter(x)
+        
         residual = x
         if self.normalize_before:
             x = self.norm3(x)
         x = residual + self.dropout(self.feed_forward(x))
         if not self.normalize_before:
             x = self.norm3(x)
+        
+        if self.adapter:
+            x = x + adapt_x
+            x = self.norm_adapter(x)
 
         if cache is not None:
             x = torch.cat([cache, x], dim=1)

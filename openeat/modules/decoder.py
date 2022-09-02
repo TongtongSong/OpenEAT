@@ -36,7 +36,7 @@ class Decoder(torch.nn.Module):
         r_num_block: int=0,
         decoder_use_adapter: bool =False,
         down_size: int=64,
-        scalar: str="0.1",
+        scalar: float = 0.1,
         share_embedding: bool = False,
     ):
 
@@ -168,7 +168,7 @@ class BiDecoder(torch.nn.Module):
         r_num_blocks: int = 0,
         adapter: bool =False,
         down_size: int=64,
-        scalar: str="0.1",
+        scalar: float = 0.1,
     ):
 
         assert check_argument_types()

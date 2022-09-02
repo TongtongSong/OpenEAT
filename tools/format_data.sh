@@ -86,6 +86,7 @@ if [ -n "${feat}" ]; then
                 cp $dir/utt2dur ${tmpdir}/input_${i}/shape.scp
             fi
         fi
+        cat  ${tmpdir}/input_${i}/shape.scp|sort -k1 > ${tmpdir}/input_${i}/tmp;mv ${tmpdir}/input_${i}/tmp ${tmpdir}/input_${i}/shape.scp
     done
 fi
 

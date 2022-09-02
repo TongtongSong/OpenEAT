@@ -116,6 +116,7 @@ class ASRModel(torch.nn.Module):
         else:
             loss = self.ctc_weight * loss_ctc + (1 -
                                                  self.ctc_weight) * loss_att
+        print(loss_ctc,loss_att)
         return loss, acc_att
 
     def _calc_att_loss(
@@ -745,18 +746,30 @@ def init_asr_model(configs):
 
     encoder_type = configs.get('encoder', 'conformer')
     decoder_type = configs.get('decoder', 'bitransformer')
-
+    encoder_use_adapter = configs.get('encoder_use_adapter', False)
+    encoder_use_adapter = configs.get('decoder_use_adapter', False)
+    down_size = configs.get('down_size', 64)
+    scalar = configs.get('scalar', 0.1)
     if encoder_type == 'conformer':
         encoder = ConformerEncoder(input_dim,
                                    global_cmvn=global_cmvn,
+                                   encoder_use_adapter = encoder_use_adapter,
+                                   down_size = down_size,
+                                   scalar = scalar,
                                    **configs['encoder_conf'])
     else:
         encoder = TransformerEncoder(input_dim,
-                                     global_cmvn=global_cmvn,
+                                    global_cmvn=global_cmvn,
+                                    encoder_use_adapter = encoder_use_adapter,
+                                    down_size = down_size,
+                                    scalar = scalar,
                                      **configs['encoder_conf'])
     if decoder_type == 'transformer':
         decoder = TransformerDecoder(vocab_size, encoder.output_size(),
-                                     **configs['decoder_conf'])
+                                    decoder_use_adapter = decoder_use_adapter,
+                                    down_size = down_size,
+                                    scalar = scalar,
+                                    **configs['decoder_conf'])
     else:
         assert 0.0 < configs['model_conf']['reverse_weight'] < 1.0
         assert configs['decoder_conf']['r_num_blocks'] > 0

@@ -3,6 +3,12 @@ model_conf:
   output_dim: 5002
   is_json_cmvn: true
   cmvn_file: ../../pre-trained/librispeech_20210610_u2pp_conformer_exp/global_cmvn
+
+  encoder_use_adapter: true
+  decoder_use_adapter: true
+  down_size: 64
+  scalar: 0.1 # learnable, 0.1-1
+  
   decoder: bitransformer
   decoder_conf:
     attention_heads: 4

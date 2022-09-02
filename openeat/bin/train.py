@@ -36,7 +36,6 @@ from openeat.utils.executor import Executor
 from openeat.utils.scheduler import WarmupLR
 from openeat.utils.common import init_logger
 
-from openeat.models.asr_model import ASRModel
 from prefetch_generator import BackgroundGenerator
 class DataLoaderX(DataLoader):
     def __iter__(self):
@@ -47,6 +46,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='training your network')
     parser.add_argument('--config', required=True,
                         help='config file')
+    parser.add_argument('--model',
+                        help='wenet or openeat',
+                        default='openeat')
     parser.add_argument('--dict', required=True,
                         help='dict')
     parser.add_argument('--bpe_model',
@@ -138,7 +140,12 @@ if __name__ == '__main__':
         data = yaml.dump(configs)
         fout.write(data)
     
-    model = ASRModel(**configs['model_conf'])
+    if args.model == 'wenet':
+        from wenet.transformer.asr_model import init_asr_model
+        model = init_asr_model(configs['model_conf'])
+    else:
+        from openeat.models.asr_model import ASRModel
+        model = ASRModel(**configs['model_conf'])
     logger.info('{}'.format(model))
 
     num_params = sum(p.numel() for p in model.parameters())
@@ -154,7 +161,6 @@ if __name__ == '__main__':
         use_cuda = args.ngpus >= 0 and torch.cuda.is_available()
         device = torch.device('cuda' if use_cuda else 'cpu')
         model = model.to(device)
-
 
     step = 0
     start_epoch = 0

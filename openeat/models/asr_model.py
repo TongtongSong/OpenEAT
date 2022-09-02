@@ -54,7 +54,7 @@ class ASRModel(torch.nn.Module):
         encoder_use_adapter: bool = False,
         decoder_use_adapter: bool = False,
         down_size: int = 64,
-        scalar: str = "0.1",
+        scalar: float = 0.1,
         ctc_weight: float = 0.3,
         lsm_weight: float = 0.1,
         reverse_weight: float = 0.0,
@@ -416,6 +416,7 @@ class ASRModel(torch.nn.Module):
                                  device=device,
                                  dtype=torch.long)  # (beam_size,)
         hyps_pad, _ = add_sos_eos(hyps_pad, self.sos, self.eos, self.ignore_id)
+        
         hyps_lens = hyps_lens + 1  # Add <sos> at begining
         encoder_out = encoder_out.repeat(beam_size, 1, 1)
         encoder_mask = torch.ones(beam_size,

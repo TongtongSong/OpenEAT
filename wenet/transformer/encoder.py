@@ -36,7 +36,7 @@ from wenet.transformer.subsampling import LinearNoSubsampling
 from wenet.utils.common import get_activation
 from wenet.utils.mask import make_pad_mask
 from wenet.utils.mask import add_optional_chunk_mask
-
+from openeat.modules.adapter import Adapter
 
 class BaseEncoder(torch.nn.Module):
     def __init__(
@@ -57,6 +57,9 @@ class BaseEncoder(torch.nn.Module):
         use_dynamic_chunk: bool = False,
         global_cmvn: torch.nn.Module = None,
         use_dynamic_left_chunk: bool = False,
+        encoder_use_adapter: bool = False,
+        down_size: int = 64,
+        scalar: float = 0.1
     ):
         """
         Args:
@@ -346,6 +349,9 @@ class TransformerEncoder(BaseEncoder):
         use_dynamic_chunk: bool = False,
         global_cmvn: torch.nn.Module = None,
         use_dynamic_left_chunk: bool = False,
+        encoder_use_adapter: bool = False,
+        down_size: int = 64,
+        scalar: float=0.1
     ):
         """ Construct TransformerEncoder
 
@@ -358,14 +364,20 @@ class TransformerEncoder(BaseEncoder):
                          input_layer, pos_enc_layer_type, normalize_before,
                          concat_after, static_chunk_size, use_dynamic_chunk,
                          global_cmvn, use_dynamic_left_chunk)
+        adapter_layer = Adapter
         self.encoders = torch.nn.ModuleList([
             TransformerEncoderLayer(
                 output_size,
                 MultiHeadedAttention(attention_heads, output_size,
                                      attention_dropout_rate),
                 PositionwiseFeedForward(output_size, linear_units,
-                                        dropout_rate), dropout_rate,
-                normalize_before, concat_after) for _ in range(num_blocks)
+                                        dropout_rate), 
+                Adapter(output_size, dropout_rate, down_size, 
+                            scalar) if encoder_use_adapter else None,
+                dropout_rate,
+                normalize_before, 
+                concat_after
+                ) for _ in range(num_blocks)
         ])
 
 
@@ -397,6 +409,9 @@ class ConformerEncoder(BaseEncoder):
         cnn_module_kernel: int = 15,
         causal: bool = False,
         cnn_module_norm: str = "batch_norm",
+        encoder_use_adapter: bool = False,
+        down_size: int = 64,
+        scalar: float=0.1
     ):
         """Construct ConformerEncoder
 
@@ -420,7 +435,8 @@ class ConformerEncoder(BaseEncoder):
                          positional_dropout_rate, attention_dropout_rate,
                          input_layer, pos_enc_layer_type, normalize_before,
                          concat_after, static_chunk_size, use_dynamic_chunk,
-                         global_cmvn, use_dynamic_left_chunk)
+                         global_cmvn, use_dynamic_left_chunk,
+                         encoder_use_adapter, down_size, scalar)
         activation = get_activation(activation_type)
 
         # self-attention module definition
@@ -455,6 +471,8 @@ class ConformerEncoder(BaseEncoder):
                     *positionwise_layer_args) if macaron_style else None,
                 convolution_layer(
                     *convolution_layer_args) if use_cnn_module else None,
+                Adapter(output_size, dropout_rate, down_size, 
+                            scalar) if encoder_use_adapter else None,
                 dropout_rate,
                 normalize_before,
                 concat_after,

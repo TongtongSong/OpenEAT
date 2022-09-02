@@ -3,6 +3,12 @@ model_conf:
   output_dim: 5235
   is_json_cmvn: true
   cmvn_file: ../../pre-trained/aishell2_20210618_u2pp_conformer_exp/global_cmvn
+  # adpater
+  encoder_use_adapter: false
+  decoder_use_adapter: false
+  down_size: 64
+  scalar: 0.1 # -1 means learnable, 0.1-1
+
   decoder: bitransformer
   decoder_conf:
     attention_heads: 4
@@ -11,12 +17,12 @@ model_conf:
     num_blocks: 3
     positional_dropout_rate: 0.1
     r_num_blocks: 3
-    self_attention_dropout_rate: 0.0
-    src_attention_dropout_rate: 0.0
+    self_attention_dropout_rate: 0.1
+    src_attention_dropout_rate: 0.1
   encoder: conformer
   encoder_conf:
     activation_type: swish
-    attention_dropout_rate: 0.0
+    attention_dropout_rate: 0.1
     attention_heads: 4
     causal: true
     cnn_module_kernel: 8
@@ -64,7 +70,7 @@ collate_conf:
 # dataset related
 dataset_conf:
     # offline speed perturb conf
-    speed_perturb: False
+    speed_perturb: false
     speeds: [0.9, 1.1, 0.1]
     max_length: 2000
     min_length: 10

@@ -47,7 +47,8 @@ class TransformerEncoderLayer(nn.Module):
         size: int,
         self_attn: torch.nn.Module,
         feed_forward: torch.nn.Module,
-        dropout_rate: float,
+        adapter: Optional[torch.nn.Module]=None,
+        dropout_rate: float = 0.1,
         normalize_before: bool = True,
         concat_after: bool = False,
     ):
@@ -55,14 +56,16 @@ class TransformerEncoderLayer(nn.Module):
         super().__init__()
         self.self_attn = self_attn
         self.feed_forward = feed_forward
+        self.adapter = adapter
+        self.norm_adapter = nn.LayerNorm(size, eps=1e-5)
         self.norm1 = nn.LayerNorm(size, eps=1e-5)
         self.norm2 = nn.LayerNorm(size, eps=1e-5)
+        
         self.dropout = nn.Dropout(dropout_rate)
         self.size = size
         self.normalize_before = normalize_before
         self.concat_after = concat_after
         self.concat_linear = nn.Linear(size + size, size)
-
 
     def forward(
         self,
@@ -110,13 +113,19 @@ class TransformerEncoderLayer(nn.Module):
         if not self.normalize_before:
             x = self.norm1(x)
 
+        if self.adapter:
+            adapt_x = self.adapter(x)
+        
         residual = x
         if self.normalize_before:
             x = self.norm2(x)
         x = residual + self.dropout(self.feed_forward(x))
         if not self.normalize_before:
             x = self.norm2(x)
-
+        
+        if self.adapter:
+            x = x + adapt_x
+            x = self.norm_adapter(x)
         fake_cnn_cache = torch.zeros((0, 0, 0), dtype=x.dtype, device=x.device)
         return x, mask, new_att_cache, fake_cnn_cache
 
@@ -151,6 +160,7 @@ class ConformerEncoderLayer(nn.Module):
         feed_forward: Optional[nn.Module] = None,
         feed_forward_macaron: Optional[nn.Module] = None,
         conv_module: Optional[nn.Module] = None,
+        adapter:Optional[nn.Module] = None,
         dropout_rate: float = 0.1,
         normalize_before: bool = True,
         concat_after: bool = False,
@@ -161,6 +171,8 @@ class ConformerEncoderLayer(nn.Module):
         self.feed_forward = feed_forward
         self.feed_forward_macaron = feed_forward_macaron
         self.conv_module = conv_module
+        self.adapter = adapter
+        self.norm_adapter = nn.LayerNorm(size, eps=1e-5)
         self.norm_ff = nn.LayerNorm(size, eps=1e-5)  # for the FNN module
         self.norm_mha = nn.LayerNorm(size, eps=1e-5)  # for the MHA module
         if feed_forward_macaron is not None:
@@ -178,8 +190,6 @@ class ConformerEncoderLayer(nn.Module):
         self.normalize_before = normalize_before
         self.concat_after = concat_after
         self.concat_linear = nn.Linear(size + size, size)
-
-
 
     def forward(
         self,
@@ -250,6 +260,9 @@ class ConformerEncoderLayer(nn.Module):
             if not self.normalize_before:
                 x = self.norm_conv(x)
 
+        if self.adapter:
+            adapt_x = self.adapter(x)
+
         # feed forward module
         residual = x
         if self.normalize_before:
@@ -259,7 +272,11 @@ class ConformerEncoderLayer(nn.Module):
         if not self.normalize_before:
             x = self.norm_ff(x)
 
+        if self.adapter:
+            x = x + adapt_x
+            x = self.norm_adapter(x)
+
         if self.conv_module is not None:
             x = self.norm_final(x)
-
+        
         return x, mask, new_att_cache, new_cnn_cache

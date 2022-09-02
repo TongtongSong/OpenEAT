@@ -24,7 +24,7 @@ from wenet.transformer.decoder_layer import DecoderLayer
 from wenet.transformer.embedding import PositionalEncoding
 from wenet.transformer.positionwise_feed_forward import PositionwiseFeedForward
 from wenet.utils.mask import (subsequent_mask, make_pad_mask)
-
+from openeat.modules.adapter import Adapter
 
 class TransformerDecoder(torch.nn.Module):
     """Base class of Transfomer decoder module.
@@ -61,6 +61,9 @@ class TransformerDecoder(torch.nn.Module):
         use_output_layer: bool = True,
         normalize_before: bool = True,
         concat_after: bool = False,
+        decoder_use_adapter: bool =False,
+        down_size: int=64,
+        scalar: float=0.1
     ):
         assert check_argument_types()
         super().__init__()
@@ -88,6 +91,8 @@ class TransformerDecoder(torch.nn.Module):
                                      src_attention_dropout_rate),
                 PositionwiseFeedForward(attention_dim, linear_units,
                                         dropout_rate),
+                Adapter(attention_dim, dropout_rate, down_size, 
+                            scalar) if decoder_use_adapter else None,
                 dropout_rate,
                 normalize_before,
                 concat_after,
@@ -224,6 +229,9 @@ class BiTransformerDecoder(torch.nn.Module):
         use_output_layer: bool = True,
         normalize_before: bool = True,
         concat_after: bool = False,
+        decoder_use_adapter: bool =False,
+        down_size: int=64,
+        scalar: float=0.1
     ):
 
         assert check_argument_types()
@@ -232,13 +240,15 @@ class BiTransformerDecoder(torch.nn.Module):
             vocab_size, encoder_output_size, attention_heads, linear_units,
             num_blocks, dropout_rate, positional_dropout_rate,
             self_attention_dropout_rate, src_attention_dropout_rate,
-            input_layer, use_output_layer, normalize_before, concat_after)
+            input_layer, use_output_layer, normalize_before, concat_after,
+            decoder_use_adapter, down_size, scalar)
 
         self.right_decoder = TransformerDecoder(
             vocab_size, encoder_output_size, attention_heads, linear_units,
             r_num_blocks, dropout_rate, positional_dropout_rate,
             self_attention_dropout_rate, src_attention_dropout_rate,
-            input_layer, use_output_layer, normalize_before, concat_after)
+            input_layer, use_output_layer, normalize_before, concat_after,
+            decoder_use_adapter, down_size, scalar)
 
     def forward(
         self,
