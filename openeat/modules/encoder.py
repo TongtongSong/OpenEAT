@@ -109,14 +109,12 @@ class TransformerEncoder(torch.nn.Module):
     def __init__(
         self,
         input_size: int,
-        global_cmvn: torch.nn.Module = None,
         input_layer: str='conv2d',
         pos_enc_layer_type: str='abs_pos',
         d_model: int = 256,
         dropout_rate: float = 0.1,
         attention_heads: int = 4,
         linear_units: int = 2048,
-        encoder_num_blocks: int = 6,
         activation_type: str = 'swish',
         macaron_style: bool = True,
         use_cnn_module: bool = True,
@@ -124,7 +122,9 @@ class TransformerEncoder(torch.nn.Module):
         causal: bool = False,
         encoder_use_adapter: bool = False,
         down_size: int = 64,
-        scalar: float = 0.1
+        scalar: float = 0.1,
+        global_cmvn: torch.nn.Module = None,
+        encoder_num_blocks: int = 6
     ):
         """
         Args:

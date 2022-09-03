@@ -140,10 +140,7 @@ if __name__ == '__main__':
         fout.write(data)
     
     model = ASRModel(**configs['model_conf'])
-    logger.info('{}'.format(model))
-
-    num_params = sum(p.numel() for p in model.parameters())
-    logger.info('The number of model params: {}'.format(num_params))
+    #logger.info('{}'.format(model))
 
     if args.ngpus>1:
         assert (torch.cuda.is_available())
@@ -171,7 +168,11 @@ if __name__ == '__main__':
         for name, param in model.named_parameters():
             if "adapter" not in name:
                 param.requires_grad = False
-    
+    total_num_params = sum(p.numel() for p in model.parameters())
+    model_parameters = filter(lambda p: p.requires_grad, model.parameters())
+    training_num_params = sum(p.numel() for p in model_parameters)
+    logger.info('The number of model params: {}/{}'.format(training_num_params,total_num_params))
+
     save_model_path = os.path.join(args.exp_dir, 'init.pt')
     save_checkpoint(model, save_model_path)
     
