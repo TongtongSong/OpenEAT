@@ -81,7 +81,7 @@ def load_trained_modules(model: torch.nn.Module, path:str, select_modules:list):
         modules = filter_modules(model_state_dict, select_modules)
         partial_state_dict = OrderedDict()
         for key, value in model_state_dict.items():
-            if any(key.startswith(m) for m in modules):
+            if any(key.startswith(m) for m in modules) and 'concat_linear' not in key:
                 partial_state_dict[key] = value
         main_state_dict.update(partial_state_dict)
     else:

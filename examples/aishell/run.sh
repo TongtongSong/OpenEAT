@@ -14,13 +14,13 @@ export LC_ALL=C
 export PYTHONIOENCODING=UTF-8
 export PATH=$PWD/tools:$PWD/openeat:$PWD:$AnacondaPath/envs/$ENVIRONMENT/bin/:$PATH
 export LC_ALL=C
-export CUDA_VISIBLE_DEVICES="1" # modify yourself
+export CUDA_VISIBLE_DEVICES="-1" # modify yourself
 
 corpus=/Work21/2020/songtongtong/data/corpus/AISHELL-1 # modify yourself
 nj=16
 
-stage=3
-stop_stage=3
+stage=0
+stop_stage=0
 
 data_stage=-4
 
@@ -44,13 +44,13 @@ checkpoint=
 cmvn_file=
 
 # using wenet pre-trained model
-# pre_trained=../../pre-trained/aishell2_20210618_u2pp_conformer_exp
-# bpe_model=../../pre-trained/librispeech_20210610_u2pp_conformer_exp/train_960_unigram5000.model
-# cmvn_file=$pre_trained/global_cmvn
-# dict=$pre_trained/words.txt
-# checkpoint=$pre_trained/final.pt
+pre_trained=../../pre-trained/aishell2_20210618_u2pp_conformer_exp
+bpe_model=../../pre-trained/librispeech_20210610_u2pp_conformer_exp/train_960_unigram5000.model
+cmvn_file=$pre_trained/global_cmvn
+dict=$pre_trained/words.txt
+checkpoint=$pre_trained/final.pt
 
-exp_name=conformer_warmupepoch10_accum1_epoch50_speed_offline_0.9_1.0_1.1 # modify yourself
+exp_name=test # modify yourself
 
 
 # stage 1: Average Model
@@ -135,10 +135,10 @@ if [ ${stage} -le ${training_stage} ] && [ ${stop_stage} -ge ${training_stage} ]
           --num_workers $num_workers \
           --config $train_config \
           --dict $dict \
-          --train_data data/$train_set/format.data.gpu079 \
-          --cv_data data/$dev_set/format.data.gpu079 \
+          --train_data data/$train_set/format.data \
+          --cv_data data/$dev_set/format.data \
           --exp_dir $exp_dir \
-          ${cmvn_file:+--cmvn_file $cmvn_file}
+          ${cmvn_file:+--cmvn_file $cmvn_file} \
           ${checkpoint:+--checkpoint $checkpoint}
     echo "===== stage ${training_stage}: Training Successfully !====="
 fi

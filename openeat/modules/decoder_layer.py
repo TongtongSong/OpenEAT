@@ -30,7 +30,7 @@ class DecoderLayer(nn.Module):
         src_attn: nn.Module,
         feed_forward: nn.Module,
         adapter: Optional[torch.nn.Module]=None,
-        dropout_rate: float=0.1
+        dropout_rate: float=0.1,
     ):
         """Construct an DecoderLayer object."""
         super().__init__()
@@ -91,6 +91,8 @@ class DecoderLayer(nn.Module):
         self_attn_x = self.self_attn(tgt_q, tgt, tgt, tgt_q_mask)
         x = residual + self.dropout(self_attn_x)
 
+        x = residual + self.dropout(self_attn_x)
+
         residual = x
         x = self.norm2(x)
         src_attn_x = self.src_attn(x, memory, memory, memory_mask)
@@ -101,7 +103,7 @@ class DecoderLayer(nn.Module):
             x = self.norm_adapter(x)
             adapt_x = residual + self.dropout(self.adapter(x))
         else:
-            adapt_x = None
+            adapt_x = torch.tensor(0)
         
         residual = x
         x = self.norm3(x)

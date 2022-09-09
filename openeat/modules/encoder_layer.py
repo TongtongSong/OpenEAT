@@ -38,7 +38,7 @@ class EncoderLayer(nn.Module):
         conv_module: Optional[torch.nn.Module],
         feed_forward: torch.nn.Module,
         adapter: Optional[torch.nn.Module],
-        dropout_rate: float = 0.1,
+        dropout_rate: float = 0.1
     ):
         """Construct an EncoderLayer object."""
         super().__init__()
@@ -100,7 +100,7 @@ class EncoderLayer(nn.Module):
             x = self.norm_adapter(x)
             adapt_x = residual + self.dropout(self.adapter(x))
         else:
-            adapt_x = None
+            adapt_x = torch.tensor(0)
         # feed forward module
         residual = x
         x = self.norm_ff(x)
@@ -109,6 +109,7 @@ class EncoderLayer(nn.Module):
 
         if adapt_x:
             x = x + adapt_x
+        
         if self.conv_module:
             x = self.norm_final(x)
         return x, masks
