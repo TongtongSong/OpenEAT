@@ -21,10 +21,9 @@ from torch.nn.utils.rnn import pad_sequence
 from openeat.utils.cmvn import load_cmvn
 from openeat.modules.cmvn import GlobalCMVN
 from openeat.modules.encoder import TransformerEncoder
-from openeat.modules.decoder import BiDecoder
+from openeat.modules.decoder import BiTransformerDecoder
 from openeat.modules.ctc import CTC
 from openeat.modules.label_smoothing_loss import LabelSmoothingLoss
-
 
 from openeat.utils.common import (IGNORE_ID, reverse_pad_list, add_sos_eos, log_add,
                                 remove_duplicates_and_blank, th_accuracy)
@@ -39,13 +38,15 @@ class ASRModel(torch.nn.Module):
         self,
         input_size: int,
         vocab_size: int,
-        encoder_num_blocks: int,
-        decoder_num_blocks: int,
-        r_decoder_num_blocks: int,
-        is_json_cmvn: bool=False,
+        is_json_cmvn: bool=True,
         cmvn_file: str=None,
+        encoder_num_blocks: int=12,
+        encoder_num_groups: int = 1,
+        decoder_num_blocks: int=6,
+        r_decoder_num_blocks: int=0,
+        decoder_num_groups: int = 1,
         input_layer: str='conv2d',
-        pos_enc_layer_type: str='abs_pos',
+        pos_enc_layer_type: str='rel_pos',
         d_model: int=256,
         attention_heads: int = 4,
         linear_units: int = 1024,
@@ -85,17 +86,24 @@ class ASRModel(torch.nn.Module):
                         activation_type, 
                         macaron_style, use_cnn_module, cnn_module_kernel, casual,
                         encoder_use_adapter, down_size, scalar)
-        self.encoder = TransformerEncoder(*encoder_args, 
-                        global_cmvn=global_cmvn, encoder_num_blocks=encoder_num_blocks)
+        self.encoder = TransformerEncoder(
+            *encoder_args,
+            global_cmvn=global_cmvn,
+            num_blocks=encoder_num_blocks, 
+            num_groups = encoder_num_groups
+        )
 
         self.ctc = CTC(vocab_size, d_model, length_normalized_loss)
 
         # decoder
         decoder_args = (vocab_size,
-                        d_model, dropout_rate, attention_heads, linear_units, 
-                        decoder_num_blocks, r_decoder_num_blocks,
+                        d_model, dropout_rate, attention_heads, linear_units,
                         decoder_use_adapter, down_size, scalar)
-        self.decoder = BiDecoder(*decoder_args)
+        self.decoder = BiTransformerDecoder(
+            *decoder_args,
+            num_blocks=decoder_num_blocks, 
+            r_num_blocks=r_decoder_num_blocks,
+            num_groups=decoder_num_groups)
 
         self.criterion_att = LabelSmoothingLoss(
             size=vocab_size,
@@ -143,11 +151,19 @@ class ASRModel(torch.nn.Module):
         ys_pad: torch.Tensor,
         ys_pad_lens: torch.Tensor,
     ):
-
         ys_in_pad, ys_out_pad = add_sos_eos(ys_pad, self.sos, self.eos,
                                             self.ignore_id)
         ys_in_lens = ys_pad_lens + 1
         r_ys_in_pad = torch.tensor(0.0)
+
+        # tgt_mask: (B, 1, L)
+        tgt_mask = ~make_pad_mask(ys_in_lens, ys_in_pad.size(1)).unsqueeze(1)
+        tgt_mask = tgt_mask.to(ys_in_pad.device)
+        # m: (1, L, L)
+        m = subsequent_mask(tgt_mask.size(-1),
+                            device=tgt_mask.device).unsqueeze(0)
+        # tgt_mask: (B, L, L)
+        tgt_mask = tgt_mask & m
         if self.reverse_weight > 0:
             # reverse the seq, used for right to left decoder
             r_ys_pad = reverse_pad_list(ys_pad, ys_pad_lens, float(self.ignore_id))
@@ -155,9 +171,7 @@ class ASRModel(torch.nn.Module):
                                                     self.ignore_id)
         # 1. Forward decoder
         decoder_out, r_decoder_out, _ = self.decoder(encoder_out, encoder_mask,
-                                                     ys_in_pad, ys_in_lens,
-                                                     r_ys_in_pad,
-                                                     self.reverse_weight)
+                        ys_in_pad, r_ys_in_pad, tgt_mask)
 
         # 2. Compute attention loss
         loss_att = self.criterion_att(decoder_out, ys_out_pad)
@@ -225,7 +239,7 @@ class ASRModel(torch.nn.Module):
                 running_size, 1, 1).to(device)  # (B*N, i, i)
             # logp: (B*N, vocab)
             p, cache, _ = self.decoder.forward_one_step(
-                encoder_out, encoder_mask, hyps, hyps_mask, cache=cache)
+               hyps, hyps_mask, encoder_out, encoder_mask, cache=cache)
             logp = torch.nn.functional.log_softmax(p,dim=-1)
             # 2.2 First beam prune: select topk best prob at current time
             top_k_logp, top_k_index = logp.topk(beam_size)  # (B*N, N)
@@ -429,6 +443,14 @@ class ASRModel(torch.nn.Module):
         hyps_pad, _ = add_sos_eos(hyps_pad, self.sos, self.eos, self.ignore_id)
         
         hyps_lens = hyps_lens + 1  # Add <sos> at begining
+        # tgt_mask: (B, 1, L)
+        hyps_mask = ~make_pad_mask(hyps_lens, hyps_pad.size(1)).unsqueeze(1)
+        hyps_mask = hyps_mask.to(hyps_pad.device)
+        # m: (1, L, L)
+        m = subsequent_mask(hyps_mask.size(-1),
+                            device=hyps_mask.device).unsqueeze(0)
+        # tgt_mask: (B, L, L)
+        hyps_mask = hyps_mask & m
         encoder_out = encoder_out.repeat(beam_size, 1, 1)
         encoder_mask = torch.ones(beam_size,
                                   1,
@@ -441,8 +463,8 @@ class ASRModel(torch.nn.Module):
         r_hyps_pad, _ = add_sos_eos(r_hyps_pad, self.sos, self.eos,
                                     self.ignore_id)
         decoder_out, r_decoder_out, pre_decoder_out = self.decoder(
-            encoder_out, encoder_mask, hyps_pad, hyps_lens, r_hyps_pad,
-            reverse_weight)  # (beam_size, max_hyps_len, vocab_size)
+            encoder_out, encoder_mask, hyps_pad, r_hyps_pad, hyps_mask)  
+            # (beam_size, max_hyps_len, vocab_size)
 
         decoder_out = torch.nn.functional.log_softmax(decoder_out, dim=-1)
         decoder_out = decoder_out.cpu().numpy()

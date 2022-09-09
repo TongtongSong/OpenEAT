@@ -22,6 +22,8 @@ from openeat.modules.adapter import Adapter
 from openeat.utils.mask import make_pad_mask
 from openeat.utils.common import get_activation
 
+
+
 class Encoder(torch.nn.Module):
     def __init__(
         self,
@@ -29,12 +31,16 @@ class Encoder(torch.nn.Module):
         dropout_rate: float = 0.1,
         attention_heads: int = 4,
         linear_units: int = 2048,
-        encoder_num_blocks: int = 6,
         activation_type: str = 'swish',
         macaron_style: bool = True,
         use_cnn_module: bool = True,
         cnn_module_kernel: int = 15,
-        causal: bool = False
+        causal: bool = False,
+        use_adapter: bool = False,
+        down_size: int = 64,
+        scalar: float = 0.1,
+        num_blocks: int = 6,
+        repeat_times: int = 1
     ):
         """
         Args:
@@ -65,30 +71,28 @@ class Encoder(torch.nn.Module):
         attention_layer_args = (attention_heads, d_model, dropout_rate)
 
         convolution_layer = ConvolutionModule
-        convolution_layer_args = (d_model, cnn_module_kernel, activation,
-                                  cnn_module_norm, causal)
-        
+        convolution_layer_args = (d_model, cnn_module_kernel, activation, causal)
+        adapter_layer = Adapter
+        adapter_layer_args = (d_model, dropout_rate, down_size, scalar)
+        self.repeat_times = repeat_times 
         self.encoders = torch.nn.ModuleList([
             EncoderLayer(
                 d_model,
                 positionwise_layer(*positionwise_layer_args) if macaron_style else None,
                 attention_layer(*attention_layer_args),
-                convolution_layer(
-                    *convolution_layer_args) if use_cnn_module else None,
-                positionwise_layer(
-                    *positionwise_layer_args),
-                None,
+                convolution_layer(*convolution_layer_args) if use_cnn_module else None,
+                positionwise_layer(*positionwise_layer_args),
+                adapter_layer(*adapter_layer_args) if use_adapter else None,
                 dropout_rate
-            ) for _ in range(encoder_num_blocks)
+            ) for _ in range(num_blocks)
         ])
-        self.after_norm = torch.nn.LayerNorm(d_model, eps=1e-5)
     def output_size(self) -> int:
         return self._output_size
 
     def forward(
         self,
         xs: torch.Tensor,
-        mask: torch.Tensor,
+        masks: torch.Tensor,
         pos_emb: torch.Tensor,
     ) ->  torch.Tensor:
         """Embed positions in tensor.
@@ -99,10 +103,10 @@ class Encoder(torch.nn.Module):
         Returns:
             encoder output tensor
         """
-        for idx,layer in enumerate(self.encoders):
-            xs = layer(xs, mask, pos_emb)
-        xs = self.after_norm(xs)
-        return xs, mask
+        for _ in range(self.repeat_times):
+            for idx,layer in enumerate(self.encoders):
+                xs, _ = layer(xs, masks, pos_emb)
+        return xs, masks
         
 
 class TransformerEncoder(torch.nn.Module):
@@ -120,11 +124,12 @@ class TransformerEncoder(torch.nn.Module):
         use_cnn_module: bool = True,
         cnn_module_kernel: int = 15,
         causal: bool = False,
-        encoder_use_adapter: bool = False,
+        use_adapter: bool = False,
         down_size: int = 64,
         scalar: float = 0.1,
         global_cmvn: torch.nn.Module = None,
-        encoder_num_blocks: int = 6
+        num_blocks: int = 6,
+        num_groups: int = 1
     ):
         """
         Args:
@@ -183,20 +188,27 @@ class TransformerEncoder(torch.nn.Module):
         convolution_layer_args = (d_model, cnn_module_kernel, activation, causal)
         adapter_layer = Adapter
         adapter_layer_args = (d_model, dropout_rate, down_size, scalar)
-        self.encoders = torch.nn.ModuleList([
-            EncoderLayer(
-                d_model,
-                positionwise_layer(*positionwise_layer_args) if macaron_style else None,
-                attention_layer(*attention_layer_args),
-                convolution_layer(
-                    *convolution_layer_args) if use_cnn_module else None,
-                positionwise_layer(
-                    *positionwise_layer_args),
-                adapter_layer(
-                    *adapter_layer_args) if encoder_use_adapter else None,
-                dropout_rate
-            ) for _ in range(encoder_num_blocks)
-        ])
+        self.num_groups = num_groups
+        if num_groups > 1:
+            assert num_blocks % num_groups ==0,'num_blocks%num_group!=0'
+            encoder_args = (d_model, dropout_rate, attention_heads, linear_units,
+                            activation_type,
+                            macaron_style,use_cnn_module,cnn_module_kernel,causal,
+                            use_adapter, down_size, scalar,
+                            1, num_blocks//num_groups)
+            self.encoders = torch.nn.ModuleList([Encoder(*encoder_args) for _ in range(num_groups)])
+        else:
+            self.encoders = torch.nn.ModuleList([
+                EncoderLayer(
+                    d_model,
+                    positionwise_layer(*positionwise_layer_args) if macaron_style else None,
+                    attention_layer(*attention_layer_args),
+                    convolution_layer(*convolution_layer_args) if use_cnn_module else None,
+                    positionwise_layer(*positionwise_layer_args),
+                    adapter_layer(*adapter_layer_args) if use_adapter else None,
+                    dropout_rate
+                ) for _ in range(num_blocks)
+            ])
         self.after_norm = torch.nn.LayerNorm(d_model, eps=1e-5)
     def output_size(self) -> int:
         return self._output_size
@@ -219,6 +231,6 @@ class TransformerEncoder(torch.nn.Module):
             xs = self.global_cmvn(xs)
         xs, masks, pos_emb = self.embed(xs, masks)
         for idx,layer in enumerate(self.encoders):
-            xs = layer(xs, masks, pos_emb)
+            xs, _ = layer(xs, masks, pos_emb)
         xs = self.after_norm(xs)
         return xs, masks

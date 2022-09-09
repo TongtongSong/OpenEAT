@@ -35,7 +35,7 @@ from openeat.dataset.dataset import AudioDataset, audio_collate_func
 from openeat.utils.checkpoint import load_checkpoint
 from openeat.utils.common import init_logger, map_to_device
 
-
+from openeat.models.asr_model import ASRModel
 from openeat.models.language_model import LanguageModel
 import kenlm
 
@@ -150,12 +150,8 @@ if __name__ == '__main__':
     device = torch.device('cuda' if use_cuda else 'cpu')
 
     # ASR Model
-    if args.model == 'wenet':
-        from wenet.transformer.asr_model import init_asr_model
-        model = init_asr_model(configs['model_conf'])
-    else:
-        from openeat.models.asr_model import ASRModel
-        model = ASRModel(**configs['model_conf'])
+    
+    model = ASRModel(**configs['model_conf'])
     
     # logger.info('{}'.format(model))
     num_params = sum(p.numel() for p in model.parameters())
@@ -222,8 +218,8 @@ if __name__ == '__main__':
                     beam_size=args.beam_size)
                 hyps = [hyps]
             for i, key in enumerate(keys):
-                numpy.savetxt(os.path.join(os.path.dirname(args.result_file),'encoder/'+key+'.txt'),encoder_out[i].cpu().numpy())
-                numpy.savetxt(os.path.join(os.path.dirname(args.result_file),'decoder/'+key+'.txt'),decoder_out[i].cpu().numpy())
+                # numpy.savetxt(os.path.join(os.path.dirname(args.result_file),'encoder/'+key+'.txt'),encoder_out[i].cpu().numpy())
+                # numpy.savetxt(os.path.join(os.path.dirname(args.result_file),'decoder/'+key+'.txt'),decoder_out[i].cpu().numpy())
                 content = []
                 for w in hyps[i]:
                     if w == eos:

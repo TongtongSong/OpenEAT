@@ -65,7 +65,7 @@ class EncoderLayer(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-        mask: torch.Tensor,
+        masks: torch.Tensor,
         pos_emb: torch.Tensor,
     ) -> torch.Tensor:
         """Compute encoded features.
@@ -86,13 +86,13 @@ class EncoderLayer(nn.Module):
         # multi-headed self-attention module
         residual = x
         x = self.norm_mha(x)
-        x_att = self.self_attn(x, x, x, mask, pos_emb)
+        x_att = self.self_attn(x, x, x, masks, pos_emb)
         x = residual + self.dropout(x_att)
 
         if self.conv_module: # conformer
             residual = x
             x = self.norm_conv(x)
-            x = self.conv_module(x, mask)
+            x = self.conv_module(x, masks)
             x = residual + self.dropout(x)
 
         if self.adapter:
@@ -109,4 +109,4 @@ class EncoderLayer(nn.Module):
             x = self.norm_adapter(x)
         if self.conv_module:
             x = self.norm_final(x)
-        return x
+        return x, masks

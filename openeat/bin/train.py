@@ -50,6 +50,9 @@ if __name__ == '__main__':
                         help='config file')
     parser.add_argument('--dict', required=True,
                         help='dict')
+    parser.add_argument('--cmvn_file',
+                        default=None,
+                        help='cmvn file for global CMVN')
     parser.add_argument('--bpe_model',
                         default=None,
                         type=str,
@@ -133,14 +136,15 @@ if __name__ == '__main__':
     else:
         configs['model_conf']['input_size'] = train_dataset.input_size # -1 means lm
     configs['model_conf']['vocab_size'] = train_dataset.vocab_size
-
+    configs['model_conf']['cmvn_file'] = args.cmvn_file
+    
     saved_config_path = os.path.join(args.exp_dir, 'train.yaml')
     with open(saved_config_path, 'w') as fout:
         data = yaml.dump(configs)
         fout.write(data)
     
     model = ASRModel(**configs['model_conf'])
-    #logger.info('{}'.format(model))
+    logger.info('{}'.format(model))
 
     if args.ngpus>1:
         assert (torch.cuda.is_available())
@@ -166,7 +170,7 @@ if __name__ == '__main__':
     decoder_adapter = configs['model_conf'].get('decoder_use_adapter', False)
     if encoder_adapter or decoder_adapter:
         for name, param in model.named_parameters():
-            if "adapter" not in name:
+            if 'adapter' not in name and 'encoder.embed' not in name:
                 param.requires_grad = False
     total_num_params = sum(p.numel() for p in model.parameters())
     model_parameters = filter(lambda p: p.requires_grad, model.parameters())
