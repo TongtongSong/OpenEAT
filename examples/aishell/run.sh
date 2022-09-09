@@ -14,13 +14,13 @@ export LC_ALL=C
 export PYTHONIOENCODING=UTF-8
 export PATH=$PWD/tools:$PWD/openeat:$PWD:$AnacondaPath/envs/$ENVIRONMENT/bin/:$PATH
 export LC_ALL=C
-export CUDA_VISIBLE_DEVICES="-1" # modify yourself
+export CUDA_VISIBLE_DEVICES="1" # modify yourself
 
 corpus=/Work21/2020/songtongtong/data/corpus/AISHELL-1 # modify yourself
 nj=16
 
-stage=0
-stop_stage=0
+stage=3
+stop_stage=3
 
 data_stage=-4
 
@@ -41,14 +41,16 @@ dev_set=dev
 
 train_config=conf/train.yaml
 checkpoint=
+cmvn_file=
 
 # using wenet pre-trained model
-pre_trained=../../pre-trained/aishell2_20210618_u2pp_conformer_exp
+# pre_trained=../../pre-trained/aishell2_20210618_u2pp_conformer_exp
 # bpe_model=../../pre-trained/librispeech_20210610_u2pp_conformer_exp/train_960_unigram5000.model
-dict=$pre_trained/words.txt
-checkpoint=$pre_trained/final.pt
+# cmvn_file=$pre_trained/global_cmvn
+# dict=$pre_trained/words.txt
+# checkpoint=$pre_trained/final.pt
 
-exp_name=test # modify yourself
+exp_name=conformer_warmupepoch10_accum1_epoch50_speed_offline_0.9_1.0_1.1 # modify yourself
 
 
 # stage 1: Average Model
@@ -133,9 +135,10 @@ if [ ${stage} -le ${training_stage} ] && [ ${stop_stage} -ge ${training_stage} ]
           --num_workers $num_workers \
           --config $train_config \
           --dict $dict \
-          --train_data data/$train_set/format.data \
-          --cv_data data/$dev_set/format.data \
+          --train_data data/$train_set/format.data.gpu079 \
+          --cv_data data/$dev_set/format.data.gpu079 \
           --exp_dir $exp_dir \
+          ${cmvn_file:+--cmvn_file $cmvn_file}
           ${checkpoint:+--checkpoint $checkpoint}
     echo "===== stage ${training_stage}: Training Successfully !====="
 fi
@@ -209,8 +212,10 @@ if [ ${stage} -le ${wer_stage} ] && [ ${stop_stage} -ge ${wer_stage} ]; then
         {
             echo $data $mode
             decode_dir=$exp_dir/$data/${mode}/${start}to${end}/beam${beam_size}_batch${batch_size}_ctc${ctc_weight}_reverse${reverse_weight}_lm${lm_weight}
+            cat $decode_dir/text|sed 's|1.0 | |' > tmp;mv tmp $decode_dir/text
             python3 tools/compute-wer.py --char=1 --v=1 \
                    data/$data/text $decode_dir/text > $decode_dir/wer
+            
             echo "wer path is $decode_dir/wer"
             cat $decode_dir/wer| grep -E "Overall|Mandarin|Other"
         }
