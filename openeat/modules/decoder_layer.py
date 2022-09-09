@@ -97,15 +97,18 @@ class DecoderLayer(nn.Module):
         x = residual + self.dropout(src_attn_x)
 
         if self.adapter:
-            adapt_x = self.adapter(x)
+            residual = x
+            x = self.norm_adapter(x)
+            adapt_x = residual + self.dropout(self.adapter(x))
+        else:
+            adapt_x = None
         
         residual = x
         x = self.norm3(x)
         x = residual + self.dropout(self.feed_forward(x))
 
-        if self.adapter:
+        if adapt_x:
             x = x + adapt_x
-            x = self.norm_adapter(x)
         
         if cache is not None:
             x = torch.cat([cache, x], dim=1)

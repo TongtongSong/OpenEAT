@@ -96,17 +96,19 @@ class EncoderLayer(nn.Module):
             x = residual + self.dropout(x)
 
         if self.adapter:
-            adapt_x = self.adapter(x)
-        
+            residual = x
+            x = self.norm_adapter(x)
+            adapt_x = residual + self.dropout(self.adapter(x))
+        else:
+            adapt_x = None
         # feed forward module
         residual = x
         x = self.norm_ff(x)
         x_ff = self.feed_forward(x)
         x = residual + self.ff_scale * self.dropout(x_ff)
 
-        if self.adapter:
+        if adapt_x:
             x = x + adapt_x
-            x = self.norm_adapter(x)
         if self.conv_module:
             x = self.norm_final(x)
         return x, masks
