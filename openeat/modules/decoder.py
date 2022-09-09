@@ -29,7 +29,6 @@ class Decoder(torch.nn.Module):
 
         assert check_argument_types()
         super().__init__()
-        assert num_blocks % num_blocks_share ==0,'num_blocks%num_blocks_share!=0'
         self.num_blocks_share = num_blocks_share
         attention_dim = encoder_output_size
         adapter_layer_args = (encoder_output_size, dropout_rate, 
@@ -137,7 +136,6 @@ class TransformerDecoder(torch.nn.Module):
 
         assert check_argument_types()
         super().__init__()
-        assert num_blocks % num_blocks_share ==0,'num_blocks%num_blocks_share!=0'
         self.num_blocks_share = num_blocks_share
         attention_dim = encoder_output_size
         adapter_layer_args = (encoder_output_size, dropout_rate, 

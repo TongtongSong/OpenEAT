@@ -55,7 +55,6 @@ class Encoder(torch.nn.Module):
         """
         assert check_argument_types()
         super().__init__()
-        assert num_blocks % num_blocks_share ==0,'num_blocks%num_blocks_share!=0'
         self._output_size = d_model
         self.num_blocks_share = num_blocks_share
         activation = get_activation(activation_type)
@@ -146,7 +145,6 @@ class TransformerEncoder(torch.nn.Module):
         """
         assert check_argument_types()
         super().__init__()
-        assert num_blocks % num_blocks_share ==0,'num_blocks%num_blocks_share!=0'
         self._output_size = d_model
         self.num_blocks_share = num_blocks_share
         if input_layer == "linear":
