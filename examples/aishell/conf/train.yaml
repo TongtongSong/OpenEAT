@@ -9,9 +9,9 @@ model_conf:
     # encoder related
     input_layer: conv2d
     pos_enc_layer_type: rel_pos # rel_pos is for conformer
+    encoder_num_blocks_share: 2
     encoder_num_blocks: 24   # the number of encoder blocks
-    encoder_num_groups: 12
-
+    
     # conformer config
     macaron_style: true # true is for conformer
     use_cnn_module: true # true is for conformer
@@ -27,7 +27,7 @@ model_conf:
     #AED config
     ctc_weight: 0.3
     lsm_weight: 0.1
-    decoder_num_groups: 3
+    decoder_num_blocks_share: 2
     decoder_num_blocks: 6
 
     # bidecoder config

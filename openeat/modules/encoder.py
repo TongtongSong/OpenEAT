@@ -40,7 +40,7 @@ class Encoder(torch.nn.Module):
         down_size: int = 64,
         scalar: float = 0.1,
         num_blocks: int = 6,
-        repeat_times: int = 1
+        num_blocks_share: int = 1
     ):
         """
         Args:
@@ -55,7 +55,9 @@ class Encoder(torch.nn.Module):
         """
         assert check_argument_types()
         super().__init__()
+        assert num_blocks % num_blocks_share ==0,'num_blocks%num_blocks_share!=0'
         self._output_size = d_model
+        self.num_blocks_share = num_blocks_share
         activation = get_activation(activation_type)
         positionwise_layer = PositionwiseFeedForward
         positionwise_layer_args = (
@@ -74,7 +76,6 @@ class Encoder(torch.nn.Module):
         convolution_layer_args = (d_model, cnn_module_kernel, activation, causal)
         adapter_layer = Adapter
         adapter_layer_args = (d_model, dropout_rate, down_size, scalar)
-        self.repeat_times = repeat_times 
         self.encoders = torch.nn.ModuleList([
             EncoderLayer(
                 d_model,
@@ -84,7 +85,7 @@ class Encoder(torch.nn.Module):
                 positionwise_layer(*positionwise_layer_args),
                 adapter_layer(*adapter_layer_args) if use_adapter else None,
                 dropout_rate
-            ) for _ in range(num_blocks)
+            ) for _ in range(num_blocks//num_blocks_share)
         ])
     def output_size(self) -> int:
         return self._output_size
@@ -103,8 +104,9 @@ class Encoder(torch.nn.Module):
         Returns:
             encoder output tensor
         """
-        for _ in range(self.repeat_times):
-            for idx,layer in enumerate(self.encoders):
+        
+        for idx,layer in enumerate(self.encoders):
+            for _ in range(self.num_blocks_share):
                 xs, _ = layer(xs, masks, pos_emb)
         return xs, masks
         
@@ -129,7 +131,7 @@ class TransformerEncoder(torch.nn.Module):
         scalar: float = 0.1,
         global_cmvn: torch.nn.Module = None,
         num_blocks: int = 6,
-        num_groups: int = 1
+        num_blocks_share: int = 1
     ):
         """
         Args:
@@ -144,7 +146,9 @@ class TransformerEncoder(torch.nn.Module):
         """
         assert check_argument_types()
         super().__init__()
+        assert num_blocks % num_blocks_share ==0,'num_blocks%num_blocks_share!=0'
         self._output_size = d_model
+        self.num_blocks_share = num_blocks_share
         if input_layer == "linear":
             subsampling_class = LinearNoSubsampling
         elif input_layer == "conv2d":
@@ -188,27 +192,17 @@ class TransformerEncoder(torch.nn.Module):
         convolution_layer_args = (d_model, cnn_module_kernel, activation, causal)
         adapter_layer = Adapter
         adapter_layer_args = (d_model, dropout_rate, down_size, scalar)
-        self.num_groups = num_groups
-        if num_groups > 1:
-            assert num_blocks % num_groups ==0,'num_blocks%num_group!=0'
-            encoder_args = (d_model, dropout_rate, attention_heads, linear_units,
-                            activation_type,
-                            macaron_style,use_cnn_module,cnn_module_kernel,causal,
-                            use_adapter, down_size, scalar,
-                            1, num_blocks//num_groups)
-            self.encoders = torch.nn.ModuleList([Encoder(*encoder_args) for _ in range(num_groups)])
-        else:
-            self.encoders = torch.nn.ModuleList([
-                EncoderLayer(
-                    d_model,
-                    positionwise_layer(*positionwise_layer_args) if macaron_style else None,
-                    attention_layer(*attention_layer_args),
-                    convolution_layer(*convolution_layer_args) if use_cnn_module else None,
-                    positionwise_layer(*positionwise_layer_args),
-                    adapter_layer(*adapter_layer_args) if use_adapter else None,
-                    dropout_rate
-                ) for _ in range(num_blocks)
-            ])
+        self.encoders = torch.nn.ModuleList([
+            EncoderLayer(
+                d_model,
+                positionwise_layer(*positionwise_layer_args) if macaron_style else None,
+                attention_layer(*attention_layer_args),
+                convolution_layer(*convolution_layer_args) if use_cnn_module else None,
+                positionwise_layer(*positionwise_layer_args),
+                adapter_layer(*adapter_layer_args) if use_adapter else None,
+                dropout_rate
+            ) for _ in range(num_blocks//num_blocks_share)
+        ])
         self.after_norm = torch.nn.LayerNorm(d_model, eps=1e-5)
     def output_size(self) -> int:
         return self._output_size
@@ -230,7 +224,9 @@ class TransformerEncoder(torch.nn.Module):
         if self.global_cmvn is not None:
             xs = self.global_cmvn(xs)
         xs, masks, pos_emb = self.embed(xs, masks)
+        
         for idx,layer in enumerate(self.encoders):
-            xs, _ = layer(xs, masks, pos_emb)
+            for _ in range(self.num_blocks_share):
+                xs, _ = layer(xs, masks, pos_emb)
         xs = self.after_norm(xs)
         return xs, masks

@@ -24,11 +24,13 @@ class Decoder(torch.nn.Module):
         down_size: int=64,
         scalar: float = 0.1,
         num_blocks: int = 6,
-        repeat_times: int = 1
+        num_blocks_share: int = 1
     ):
 
         assert check_argument_types()
         super().__init__()
+        assert num_blocks % num_blocks_share ==0,'num_blocks%num_blocks_share!=0'
+        self.num_blocks_share = num_blocks_share
         attention_dim = encoder_output_size
         adapter_layer_args = (encoder_output_size, dropout_rate, 
                              down_size, scalar)
@@ -45,7 +47,7 @@ class Decoder(torch.nn.Module):
                                         dropout_rate),
                 adapter_layer(*adapter_layer_args) if use_adapter else None,
                 dropout_rate
-            ) for _ in range(num_blocks)
+            ) for _ in range(num_blocks//num_blocks_share)
         ])
     
     def forward(
@@ -69,8 +71,8 @@ class Decoder(torch.nn.Module):
         """
         # tgt_mask: (B, 1, L)
         x = tgt
-        for _ in range(self.repeat_times):
-            for idx, layer in enumerate(self.decoders):
+        for idx, layer in enumerate(self.decoders):
+            for _ in range(self.num_blocks_share):
                 x = layer(x, tgt_mask, memory, memory_mask)
         return x
 
@@ -98,12 +100,13 @@ class Decoder(torch.nn.Module):
         x = tgt
         new_cache = []
         for i, decoder in enumerate(self.decoders):
-            if cache is None:
-                c = None
-            else:
-                c = cache[i]
-            x= decoder(x, tgt_mask, memory,memory_mask, cache=c)
-            new_cache.append(x)
+            for j in range(self.num_blocks_share):
+                if cache is None:
+                    c = None
+                else:
+                    c = cache[i*self.num_blocks_share+j]
+                x= decoder(x, tgt_mask, memory,memory_mask, cache=c)
+                new_cache.append(x)
         return x, new_cache
 
 class TransformerDecoder(torch.nn.Module):
@@ -128,12 +131,14 @@ class TransformerDecoder(torch.nn.Module):
         down_size: int = 64,
         scalar: float = 0.1,
         num_blocks: int = 6,
-        num_groups: int = 1,
+        num_blocks_share: int = 1,
         share_embedding: bool = False,
     ):
 
         assert check_argument_types()
         super().__init__()
+        assert num_blocks % num_blocks_share ==0,'num_blocks%num_blocks_share!=0'
+        self.num_blocks_share = num_blocks_share
         attention_dim = encoder_output_size
         adapter_layer_args = (encoder_output_size, dropout_rate, 
                              down_size, scalar)
@@ -143,26 +148,20 @@ class TransformerDecoder(torch.nn.Module):
                 torch.nn.Embedding(vocab_size, attention_dim),
                 PositionalEncoding(attention_dim)
         )
-        if num_groups>1:
-            assert num_blocks % num_groups ==0,'num_blocks%num_group!=0'
-            decoder_args = (attention_dim, dropout_rate, attention_heads, linear_units,
-                            use_adapter, down_size, scalar,
-                            1, num_blocks//num_groups)
-            self.decoders = torch.nn.ModuleList([Decoder(*decoder_args)for _ in range(num_groups)])
-        else:
-            self.decoders = torch.nn.ModuleList([
-                DecoderLayer(
-                    attention_dim,
-                    MultiHeadedAttention(attention_heads, attention_dim,
+        
+        self.decoders = torch.nn.ModuleList([
+            DecoderLayer(
+                attention_dim,
+                MultiHeadedAttention(attention_heads, attention_dim,
+                                    dropout_rate),
+                MultiHeadedAttention(attention_heads, attention_dim,
+                                    dropout_rate),
+                PositionwiseFeedForward(attention_dim, linear_units,
                                         dropout_rate),
-                    MultiHeadedAttention(attention_heads, attention_dim,
-                                        dropout_rate),
-                    PositionwiseFeedForward(attention_dim, linear_units,
-                                            dropout_rate),
-                    adapter_layer(*adapter_layer_args) if use_adapter else None,
-                    dropout_rate
-                ) for _ in range(num_blocks)
-            ])
+                adapter_layer(*adapter_layer_args) if use_adapter else None,
+                dropout_rate
+            ) for _ in range(num_blocks//num_blocks_share)
+        ])
         self.after_norm = torch.nn.LayerNorm(attention_dim, eps=1e-12)
         self.output_layer = torch.nn.Linear(attention_dim, vocab_size)
         if share_embedding:
@@ -189,7 +188,8 @@ class TransformerDecoder(torch.nn.Module):
         """
         x, _ = self.embed(tgt)
         for idx, layer in enumerate(self.decoders):
-            x = layer(x, tgt_mask, memory, memory_mask)
+            for _ in range(self.num_blocks_share):
+                x = layer(x, tgt_mask, memory, memory_mask)
         x = self.after_norm(x)
         pre_x = x
         x = self.output_layer(x)
@@ -221,12 +221,13 @@ class TransformerDecoder(torch.nn.Module):
         x, _ = self.embed(tgt)
         new_cache = []
         for i, decoder in enumerate(self.decoders):
-            if cache is None:
-                c = None
-            else:
-                c = cache[i]
-            x = decoder(x, tgt_mask, memory,memory_mask, cache=c)
-            new_cache.append(x)
+            for j in range(self.num_blocks_share):
+                if cache is None:
+                    c = None
+                else:
+                    c = cache[i* self.num_blocks_share+j]
+                x = decoder(x, tgt_mask, memory,memory_mask, cache=c)
+                new_cache.append(x)
 
         y = self.after_norm(x[:, -1])
         pre_y = y
@@ -256,7 +257,7 @@ class BiTransformerDecoder(torch.nn.Module):
         scalar: float = 0.1,
         num_blocks: int = 6,
         r_num_blocks: int = 0,
-        num_groups: int = 1
+        num_blocks_share: int = 1
     ):
 
         assert check_argument_types()
@@ -267,14 +268,14 @@ class BiTransformerDecoder(torch.nn.Module):
             vocab_size, 
             encoder_output_size, dropout_rate, attention_heads, linear_units,
             use_adapter, down_size, scalar,
-            num_blocks, num_groups
+            num_blocks, num_blocks_share
         )
         if r_num_blocks > 0:
             self.right_decoder = TransformerDecoder(
                 vocab_size,  
                 encoder_output_size, dropout_rate, attention_heads, linear_units, 
                 use_adapter, down_size, scalar,
-                r_num_blocks, num_groups
+                r_num_blocks, num_blocks_share
             )
 
     def forward(

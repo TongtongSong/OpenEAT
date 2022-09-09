@@ -41,10 +41,10 @@ class ASRModel(torch.nn.Module):
         is_json_cmvn: bool=True,
         cmvn_file: str=None,
         encoder_num_blocks: int=12,
-        encoder_num_groups: int = 1,
+        encoder_num_blocks_share: int = 1,
         decoder_num_blocks: int=6,
         r_decoder_num_blocks: int=0,
-        decoder_num_groups: int = 1,
+        decoder_num_blocks_share: int = 1,
         input_layer: str='conv2d',
         pos_enc_layer_type: str='rel_pos',
         d_model: int=256,
@@ -90,7 +90,7 @@ class ASRModel(torch.nn.Module):
             *encoder_args,
             global_cmvn=global_cmvn,
             num_blocks=encoder_num_blocks, 
-            num_groups = encoder_num_groups
+            num_blocks_share = encoder_num_blocks_share
         )
 
         self.ctc = CTC(vocab_size, d_model, length_normalized_loss)
@@ -103,7 +103,7 @@ class ASRModel(torch.nn.Module):
             *decoder_args,
             num_blocks=decoder_num_blocks, 
             r_num_blocks=r_decoder_num_blocks,
-            num_groups=decoder_num_groups)
+            num_blocks_share = decoder_num_blocks_share)
 
         self.criterion_att = LabelSmoothingLoss(
             size=vocab_size,
