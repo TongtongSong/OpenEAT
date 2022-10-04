@@ -48,7 +48,6 @@ class EncoderLayer(nn.Module):
         self.conv_module = conv_module
         self.feed_forward = feed_forward
         self.adapter = adapter
-        self.norm_adapter = nn.LayerNorm(size, eps=1e-12)
         self.ff_scale = 1
         if feed_forward_macaron:
             self.ff_scale = 0.5
@@ -96,19 +95,17 @@ class EncoderLayer(nn.Module):
             x = residual + self.dropout(x)
 
         if self.adapter:
-            residual = x
-            x = self.norm_adapter(x)
-            adapt_x = residual + self.dropout(self.adapter(x))
+            adapt_x = self.adapter(x)
         else:
             adapt_x = torch.tensor(0)
+        
         # feed forward module
         residual = x
         x = self.norm_ff(x)
         x_ff = self.feed_forward(x)
         x = residual + self.ff_scale * self.dropout(x_ff)
 
-        if adapt_x:
-            x = x + adapt_x
+        x = x + adapt_x
         
         if self.conv_module:
             x = self.norm_final(x)

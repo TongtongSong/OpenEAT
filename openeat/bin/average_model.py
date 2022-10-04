@@ -5,8 +5,9 @@ import argparse
 import torch
 import os
 import sys
-
-
+import numpy as np
+import glob
+import yaml
 def parse_args():
     parser = argparse.ArgumentParser(description='average model')
     parser.add_argument('--src_path',
@@ -15,6 +16,13 @@ def parse_args():
     parser.add_argument('--dst_model',
                         required=True,
                         help='dst model used for saving checkpoint')
+    parser.add_argument('--val_best',
+                        action="store_true",
+                        help='averaged model')
+    parser.add_argument('--num',
+                        default=5,
+                        type=int,
+                        help='nums for averaged model')
     parser.add_argument('--start',
                         default=0,
                         type=int,
@@ -28,9 +36,27 @@ def parse_args():
     return args
 
 def average_chkpt(args):
-    id_chkpt = [str(i) for i in range(int(args.start), int(args.end)+1)]
+    if args.val_best:
+        val_scores = []
+        yamls = glob.glob('{}/[!train]*.yaml'.format(args.src_path))
+        for y in yamls:
+            with open(y, 'r') as f:
+                dic_yaml = yaml.load(f, Loader=yaml.FullLoader)
+                loss = dic_yaml['cv_loss']
+                epoch = dic_yaml['epoch']
+                if epoch >= args.start and epoch <= args.end:
+                    val_scores += [[epoch, loss]]
+        val_scores = np.array(val_scores)
+        sort_idx = np.argsort(val_scores[:, -1])
+        sorted_val_scores = val_scores[sort_idx][::1]
+        print("best val scores = " + str(sorted_val_scores[:args.num, 1]))
+        print("selected epochs = " +
+              str(sorted_val_scores[:args.num, 0].astype(np.int64)))
+        id_chkpt = [str(i) for i in sorted_val_scores[:args.num, 0].astype(np.int64)]
+    else:
+        id_chkpt = [str(i) for i in range(int(args.start), int(args.end)+1)]
     print('Average these number %s models' % ','.join(id_chkpt))
-
+    
     chkpts = ['%s.pt' % idx for idx in id_chkpt]
 
     params_dict = {}

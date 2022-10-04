@@ -16,7 +16,7 @@ from openeat.modules.label_smoothing_loss import LabelSmoothingLoss
 class Decoder(torch.nn.Module):
     def __init__(
         self,
-        encoder_output_size: int,
+        d_model: int,
         dropout_rate: float = 0.1,
         attention_heads: int = 4,
         linear_units: int = 2048,
@@ -30,8 +30,8 @@ class Decoder(torch.nn.Module):
         assert check_argument_types()
         super().__init__()
         self.num_blocks_share = num_blocks_share
-        attention_dim = encoder_output_size
-        adapter_layer_args = (encoder_output_size, dropout_rate, 
+        attention_dim = d_model
+        adapter_layer_args = (d_model, dropout_rate, 
                              down_size, scalar)
         adapter_layer = Adapter
         self.repeat_times = repeat_times 
@@ -112,7 +112,7 @@ class TransformerDecoder(torch.nn.Module):
     """Base class of Transfomer decoder module.
     Args:
         vocab_size: output dim
-        encoder_output_size: dimension of attention
+        d_model: dimension of attention
         attention_heads: the number of heads of multi head attention
         linear_units: the hidden units number of position-wise feedforward
         num_blocks: the number of decoder blocks
@@ -122,7 +122,7 @@ class TransformerDecoder(torch.nn.Module):
     def __init__(
         self,
         vocab_size: int,
-        encoder_output_size: int,
+        d_model: int,
         dropout_rate: float = 0.1,
         attention_heads: int = 4,
         linear_units: int = 2048,
@@ -137,8 +137,8 @@ class TransformerDecoder(torch.nn.Module):
         assert check_argument_types()
         super().__init__()
         self.num_blocks_share = num_blocks_share
-        attention_dim = encoder_output_size
-        adapter_layer_args = (encoder_output_size, dropout_rate, 
+        attention_dim = d_model
+        adapter_layer_args = (d_model, dropout_rate, 
                              down_size, scalar)
         adapter_layer = Adapter
 
@@ -236,7 +236,7 @@ class BiTransformerDecoder(torch.nn.Module):
     """Base class of Transfomer decoder module.
     Args:
         vocab_size: output dim
-        encoder_output_size: dimension of attention
+        d_model: dimension of attention
         attention_heads: the number of heads of multi head attention
         dropout_rate: dropout rate
         linear_units: the hidden units number of position-wise feedforward
@@ -246,7 +246,7 @@ class BiTransformerDecoder(torch.nn.Module):
     def __init__(
         self,
         vocab_size: int,
-        encoder_output_size: int,
+        d_model: int,
         dropout_rate: float = 0.1,
         attention_heads: int = 4,
         linear_units: int = 2048,
@@ -264,14 +264,14 @@ class BiTransformerDecoder(torch.nn.Module):
         
         self.left_decoder = TransformerDecoder(
             vocab_size, 
-            encoder_output_size, dropout_rate, attention_heads, linear_units,
+            d_model, dropout_rate, attention_heads, linear_units,
             use_adapter, down_size, scalar,
             num_blocks, num_blocks_share
         )
         if r_num_blocks > 0:
             self.right_decoder = TransformerDecoder(
                 vocab_size,  
-                encoder_output_size, dropout_rate, attention_heads, linear_units, 
+                d_model, dropout_rate, attention_heads, linear_units, 
                 use_adapter, down_size, scalar,
                 r_num_blocks, num_blocks_share
             )

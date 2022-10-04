@@ -181,7 +181,7 @@ class audio_collate_func(object):
         self.raw_wav = raw_wav
         self.feature_extraction_conf = feature_extraction_conf
         self.normalization = normalization
-
+        print('normalize',self.normalization)
 
     def __call__(self, batch):
         if len(batch) == 1:

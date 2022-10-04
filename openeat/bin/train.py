@@ -170,7 +170,7 @@ if __name__ == '__main__':
     decoder_adapter = configs['model_conf'].get('decoder_use_adapter', False)
     if encoder_adapter or decoder_adapter:
         for name, param in model.named_parameters():
-            if 'adapter' not in name and 'encoder.embed' not in name:
+            if 'adapter' not in name and 'ctc' not in name and 'output' not in name and 'embed' not in name and 'norm' not in name:
                 param.requires_grad = False
     total_num_params = sum(p.numel() for p in model.parameters())
     model_parameters = filter(lambda p: p.requires_grad, model.parameters())

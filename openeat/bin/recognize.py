@@ -51,8 +51,8 @@ if __name__ == '__main__':
                         default=None,
                         type=str,
                         help='bpe model for english part')
-    parser.add_argument('--raw_wav', type=bool,
-                        default=True,
+    parser.add_argument('--raw_wav',
+                        action="store_true",
                         help='whether raw wav')
     parser.add_argument('--num_workers', type=int,
                         default=1)

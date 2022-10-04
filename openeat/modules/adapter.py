@@ -11,9 +11,9 @@ import torch.nn as nn
 class Adapter(nn.Module):
     def __init__(self,
                  d_model,
-                 dropout_rate=0.1,
+                 dropout_rate = 0.1,
                  down_size = 64,
-                 adapter_scalar=0.1):
+                 adapter_scalar = 0.1):
         super().__init__()
 
         if adapter_scalar == -1:
@@ -27,7 +27,8 @@ class Adapter(nn.Module):
         self.up_proj = nn.Linear(down_size, d_model)
 
     def forward(self, x):
+        residual = x
         x = self.norm(x)
         x = self.up_proj(self.dropout(self.relu(self.down_proj(x))))
-        x = x * self.scale
+        x = residual + self.scale* self.dropout(x)
         return x

@@ -43,7 +43,16 @@ class CTC(torch.nn.Module):
         # Batch-size average
         loss = loss / ys_hat.size(1)
         return loss
+    def softmax(self, hs_pad: torch.Tensor) -> torch.Tensor:
+        """log_softmax of frame activations
 
+        Args:
+            Tensor hs_pad: 3d tensor (B, Tmax, eprojs)
+        Returns:
+            torch.Tensor: log softmax applied 3d tensor (B, Tmax, odim)
+        """
+        return F.softmax(self.ctc_lo(hs_pad), dim=-1)
+        
     def log_softmax(self, hs_pad: torch.Tensor) -> torch.Tensor:
         """log_softmax of frame activations
 

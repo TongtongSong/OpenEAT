@@ -40,6 +40,8 @@ class ASRModel(torch.nn.Module):
         vocab_size: int,
         is_json_cmvn: bool=True,
         cmvn_file: str=None,
+        cn_cmvn_file: str=None,
+        en_cmvn_file: str=None,
         encoder_num_blocks: int=12,
         encoder_num_blocks_share: int = 1,
         decoder_num_blocks: int=6,
@@ -81,6 +83,15 @@ class ASRModel(torch.nn.Module):
                 torch.from_numpy(istd).float())
         else:
             global_cmvn = None
+
+        if cmvn_file is not None:
+            mean, istd = load_cmvn(cmvn_file, is_json_cmvn)
+            global_cmvn = GlobalCMVN(
+                torch.from_numpy(mean).float(),
+                torch.from_numpy(istd).float())
+        else:
+            global_cmvn = None
+        
         encoder_args = (input_size, input_layer, pos_enc_layer_type,
                         d_model, dropout_rate, attention_heads, linear_units, 
                         activation_type, 
@@ -88,9 +99,9 @@ class ASRModel(torch.nn.Module):
                         encoder_use_adapter, down_size, scalar)
         self.encoder = TransformerEncoder(
             *encoder_args,
-            global_cmvn=global_cmvn,
             num_blocks=encoder_num_blocks, 
-            num_blocks_share = encoder_num_blocks_share
+            num_blocks_share = encoder_num_blocks_share,
+            global_cmvn=global_cmvn,
         )
 
         self.ctc = CTC(vocab_size, d_model, length_normalized_loss)
@@ -131,7 +142,8 @@ class ASRModel(torch.nn.Module):
         assert (features.shape[0] == features_length.shape[0] == targets.shape[0] ==
                 targets_length.shape[0]), (features.shape, features_length.shape,
                                          targets.shape, targets_length.shape)
-        encoder_out, encoder_mask = self.encoder(features, features_length)
+        masks = ~make_pad_mask(features_length, features.size(1)).unsqueeze(1)  # (B, 1, T)
+        encoder_out, encoder_mask, _ = self.encoder(features, masks)
         encoder_out_lens = encoder_mask.squeeze(1).sum(1)
         loss_ctc = self.ctc(encoder_out, encoder_out_lens, targets, targets_length)
         if self.ctc_weight < 1:
@@ -210,7 +222,8 @@ class ASRModel(torch.nn.Module):
 
         # Let's assume B = batch_size and N = beam_size
         # 1. Encoder
-        encoder_out, encoder_mask = self.encoder(features, features_length)
+        masks = ~make_pad_mask(features_length, features.size(1)).unsqueeze(1)  # (B, 1, T)
+        encoder_out, encoder_mask, _ = self.encoder(features, masks)
         #encoder_out = self.affine_norm(self.affine_linear(encoder_out))
         maxlen = encoder_out.size(1)
         encoder_dim = encoder_out.size(2)
@@ -298,7 +311,8 @@ class ASRModel(torch.nn.Module):
         assert features.shape[0] == features_length.shape[0]
         batch_size = features.shape[0]
         # Let's assume B = batch_size
-        encoder_out, encoder_mask = self.encoder(features, features_length)
+        masks = ~make_pad_mask(features_length, features.size(1)).unsqueeze(1)  # (B, 1, T)
+        encoder_out, encoder_mask,_ = self.encoder(features, masks)
         maxlen = encoder_out.size(1)
         encoder_out_lens = encoder_mask.squeeze(1).sum(1)
         ctc_probs = self.ctc.log_softmax(
@@ -333,7 +347,8 @@ class ASRModel(torch.nn.Module):
         assert batch_size == 1
         # Let's assume B = batch_size and N = beam_size
         # 1. Encoder forward and get CTC score
-        encoder_out, encoder_mask = self.encoder(features, features_length)
+        masks = ~make_pad_mask(features_length, features.size(1)).unsqueeze(1)  # (B, 1, T)
+        encoder_out, encoder_mask,_ = self.encoder(features, masks)
         maxlen = encoder_out.size(1)
         ctc_probs = self.ctc.log_softmax(
             encoder_out)  # (1, maxlen, vocab_size)

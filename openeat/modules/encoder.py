@@ -18,8 +18,6 @@ from openeat.modules.convolution import ConvolutionModule
 from openeat.modules.encoder_layer import EncoderLayer
 from openeat.modules.positionwise_feed_forward import PositionwiseFeedForward
 from openeat.modules.adapter import Adapter
-
-from openeat.utils.mask import make_pad_mask
 from openeat.utils.common import get_activation
 
 
@@ -107,7 +105,7 @@ class Encoder(torch.nn.Module):
         for idx,layer in enumerate(self.encoders):
             for _ in range(self.num_blocks_share):
                 xs, _ = layer(xs, masks, pos_emb)
-        return xs, masks
+        return xs, masks, pos_emb
         
 
 class TransformerEncoder(torch.nn.Module):
@@ -128,9 +126,9 @@ class TransformerEncoder(torch.nn.Module):
         use_adapter: bool = False,
         down_size: int = 64,
         scalar: float = 0.1,
-        global_cmvn: torch.nn.Module = None,
         num_blocks: int = 6,
-        num_blocks_share: int = 1
+        num_blocks_share: int = 1,
+        global_cmvn: torch.nn.Module = None
     ):
         """
         Args:
@@ -208,18 +206,17 @@ class TransformerEncoder(torch.nn.Module):
     def forward(
         self,
         xs: torch.Tensor,
-        xs_lens: torch.Tensor
-    ) ->  torch.Tensor:
+        masks: torch.Tensor
+    ):
         """Embed positions in tensor.
         Args:
             xs: padded input tensor (B, L, D)
-            xs_lens: input length (B)
+            masks: input length (B,L)
 
         Returns:
             encoder output tensor
         """
-        masks = ~make_pad_mask(xs_lens, xs.size(1)).unsqueeze(1)  # (B, 1, T)
-        if self.global_cmvn is not None:
+        if self.global_cmvn:
             xs = self.global_cmvn(xs)
         xs, masks, pos_emb = self.embed(xs, masks)
         
@@ -227,4 +224,4 @@ class TransformerEncoder(torch.nn.Module):
             for _ in range(self.num_blocks_share):
                 xs, _ = layer(xs, masks, pos_emb)
         xs = self.after_norm(xs)
-        return xs, masks
+        return xs, masks, pos_emb

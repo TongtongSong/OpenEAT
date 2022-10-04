@@ -39,7 +39,6 @@ class DecoderLayer(nn.Module):
         self.src_attn = src_attn
         self.feed_forward = feed_forward
         self.adapter = adapter
-        self.norm_adapter = nn.LayerNorm(size, eps=1e-12)
         self.norm1 = nn.LayerNorm(size, eps=1e-12)
         self.norm2 = nn.LayerNorm(size, eps=1e-12)
         self.norm3 = nn.LayerNorm(size, eps=1e-12)
@@ -91,17 +90,13 @@ class DecoderLayer(nn.Module):
         self_attn_x = self.self_attn(tgt_q, tgt, tgt, tgt_q_mask)
         x = residual + self.dropout(self_attn_x)
 
-        x = residual + self.dropout(self_attn_x)
-
         residual = x
         x = self.norm2(x)
         src_attn_x = self.src_attn(x, memory, memory, memory_mask)
         x = residual + self.dropout(src_attn_x)
 
         if self.adapter:
-            residual = x
-            x = self.norm_adapter(x)
-            adapt_x = residual + self.dropout(self.adapter(x))
+            adapt_x = self.adapter(x)
         else:
             adapt_x = torch.tensor(0)
         
@@ -109,8 +104,7 @@ class DecoderLayer(nn.Module):
         x = self.norm3(x)
         x = residual + self.dropout(self.feed_forward(x))
 
-        if adapt_x:
-            x = x + adapt_x
+        x = x + adapt_x
         
         if cache is not None:
             x = torch.cat([cache, x], dim=1)
