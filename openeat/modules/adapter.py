@@ -2,6 +2,7 @@
 # References:
 # https://github.com/jxhe/unify-parameter-efficient-tuning
 # --------------------------------------------------------
+# Copyright 2021 songtongmail@163.com(Tongtong Song)
 
 import math
 import torch
@@ -30,5 +31,5 @@ class Adapter(nn.Module):
         residual = x
         x = self.norm(x)
         x = self.up_proj(self.dropout(self.relu(self.down_proj(x))))
-        x = residual + self.scale* self.dropout(x)
+        x = residual + self.scale * self.dropout(x)
         return x

@@ -51,7 +51,7 @@ def _extract_feature(batch, feature_extraction_conf):
     lengths = []
     labels = []
     for i, x in enumerate(batch):
-        try:
+        try: 
             wav = x[1]
             value = wav.strip().split(",")
             # 1 for general wav.scp, 3 for segmented wav.scp
@@ -84,7 +84,6 @@ def _extract_feature(batch, feature_extraction_conf):
                 sample_rate = resample_rate
             
             # speed perturb
-
             speed = x[3]
             if random.random() < speed_perturb_rate:
                 speed = _speed_generator(speeds)
@@ -163,7 +162,7 @@ class audio_collate_func(object):
         spec_aug_conf=None,
         spec_sub=False,
         spec_sub_conf=None,
-        raw_wav=True,
+        data_type="kaldi",
         feature_extraction_conf=None,
         normalization=True
     ):
@@ -178,15 +177,15 @@ class audio_collate_func(object):
         self.spec_aug = spec_aug
         self.spec_sub_conf = spec_sub_conf
         self.spec_aug_conf = spec_aug_conf
-        self.raw_wav = raw_wav
+        self.data_type = data_type
         self.feature_extraction_conf = feature_extraction_conf
         self.normalization = normalization
-        print('normalize',self.normalization)
+        print('normalize feature',self.normalization)
 
     def __call__(self, batch):
         if len(batch) == 1:
             batch = batch[0]
-        if self.raw_wav:
+        if self.data_type == 'wav':
             keys, xs, ys = _extract_feature(batch,self.feature_extraction_conf)
         else:
             keys, xs, ys = _load_feature(batch)
@@ -254,7 +253,7 @@ class AudioDataset(Dataset):
                  sort = False,
                  speed_perturb = False,
                  speeds = [0.9, 1.1, 0.1],
-                 raw_wav = True):
+                 data_type="kaldi"):
         """Dataset for loading audio data.
         Attributes:
             data_file: input data file
@@ -305,16 +304,22 @@ class AudioDataset(Dataset):
         with codecs.open(data_file, 'r', encoding='utf-8') as f:
             for line in f:
                 arr = line.strip().split('\t')
-                if len(arr) != 4:
+                if len(arr) != 4 and len(arr) != 7:
                     continue
+                
                 key = arr[0].split(':')[1]
-                text = arr[3].split(':')[1]
-                text = text.replace('<unk>','zzzzzz')
-                text = _remove_punctuation(text)
-                text = text.replace('zzzzzz','#')
-                tokens = _tokenizer(text, sp)
-                tokenid = [char_dict[w] if w in char_dict else char_dict['<unk>'] for w in tokens]
-                if raw_wav:
+                if len(arr) == 4:
+                    text = arr[3].split(':')[1]
+                    text = text.replace('<unk>','zzzzzz')
+                    text = _remove_punctuation(text)
+                    text = text.replace('zzzzzz','#')
+                    tokens = _tokenizer(text, sp)
+                    tokenid = [char_dict[w] if w in char_dict else char_dict['<unk>'] for w in tokens]
+                elif len(arr) == 7:
+                    tokenid = arr[5].split(':')[1]
+                else:
+                    pass
+                if data_type == 'wav':
                     path = ':'.join(arr[1].split(':')[1:])
                     num_frames = int(float(arr[2].split(':')[1]) * 1000 / 10)
                 else:

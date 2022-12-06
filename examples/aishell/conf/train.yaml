@@ -1,6 +1,5 @@
 # network architecture
 model_conf:
-
     d_model: 256  # dimension of attention
     attention_heads: 4
     linear_units: 1024  # the number of units of position-wise feed forward
@@ -9,14 +8,14 @@ model_conf:
     # encoder related
     input_layer: conv2d
     pos_enc_layer_type: rel_pos # rel_pos is for conformer
-    encoder_num_blocks_share: 2
-    encoder_num_blocks: 24   # the number of encoder blocks
+    encoder_num_blocks_share: 1
+    encoder_num_blocks: 12   # the number of encoder blocks
     
     # conformer config
     macaron_style: true # true is for conformer
     use_cnn_module: true # true is for conformer
     cnn_module_kernel: 15
-    casual: true
+    causal: false
     
     # adapter config
     encoder_use_adapter: false
@@ -27,11 +26,11 @@ model_conf:
     #AED config
     ctc_weight: 0.3
     lsm_weight: 0.1
-    decoder_num_blocks_share: 2
-    decoder_num_blocks: 6
+    decoder_num_blocks_share: 1
+    decoder_num_blocks: 3
 
     # bidecoder config
-    r_decoder_num_blocks: 6
+    r_decoder_num_blocks: 3
     reverse_weight: 0.3
 
 # feature extraction
@@ -58,7 +57,7 @@ collate_conf:
 
 # dataset related
 dataset_conf:
-    # offline speed perturb conf
+    # offline speed perturb conf if raw wav
     speed_perturb: False
     speeds: [0.9, 1.1, 0.1]
     max_length: 2000
@@ -67,11 +66,10 @@ dataset_conf:
     max_frames_in_batch: 10000 # if dynamic
     batch_size: 12 # if staticd
     sort: true
-    raw_wav: true # must be false if kaldi else true
 
 grad_clip: 5
-accum_grad: 2
-max_epoch: 100
+accum_grad: 1
+max_epoch: 50
 log_interval: 100
 
 optim: adam

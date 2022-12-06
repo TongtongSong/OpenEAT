@@ -57,7 +57,7 @@ class ASRModel(torch.nn.Module):
         macaron_style: bool = True,
         use_cnn_module: bool = True,
         cnn_module_kernel: int = 15,
-        casual: bool=False,
+        causal: bool=False,
         encoder_use_adapter: bool = False,
         decoder_use_adapter: bool = False,
         down_size: int = 64,
@@ -95,7 +95,7 @@ class ASRModel(torch.nn.Module):
         encoder_args = (input_size, input_layer, pos_enc_layer_type,
                         d_model, dropout_rate, attention_heads, linear_units, 
                         activation_type, 
-                        macaron_style, use_cnn_module, cnn_module_kernel, casual,
+                        macaron_style, use_cnn_module, cnn_module_kernel, causal,
                         encoder_use_adapter, down_size, scalar)
         self.encoder = TransformerEncoder(
             *encoder_args,

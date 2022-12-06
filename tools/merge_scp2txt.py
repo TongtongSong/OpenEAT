@@ -108,13 +108,16 @@ if __name__ == '__main__':
     for f in args.output_scps[0]:
         arr = f.strip().split(':')
         outputs[arr[0]] = arr[1]
+    assert ('shape' in outputs)
     assert ('text' in outputs)
+    assert ('token' in outputs)
+    assert ('tokenid' in outputs)
 
     files = [
-        inputs['feat'], inputs['shape'], 
-        outputs['text']
+        inputs['feat'], inputs['shape'], outputs['text'], outputs['token'],
+        outputs['tokenid'], outputs['shape']
     ]
-    fields = ['feat', 'feat_shape', 'text']
+    fields = ['feat', 'feat_shape', 'text', 'token', 'tokenid', 'token_shape']
     fids = [open(f, 'r', encoding='utf-8') for f in files]
 
     # the file with the minimum number of lines in the first

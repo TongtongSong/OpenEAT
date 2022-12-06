@@ -9,18 +9,19 @@ set -o pipefail
 AnacondaPath=/Work18/2020/songtongtong/anaconda3 # modify yourself
 ENVIRONMENT=torch1.9_cuda11.1 # modify yourself
 conda activate $ENVIRONMENT
+export CUDA_VISIBLE_DEVICES="1" # modify yourself
 
 export LC_ALL=C
 export PYTHONIOENCODING=UTF-8
 export PATH=$PWD/tools:$PWD/openeat:$PWD:$AnacondaPath/envs/$ENVIRONMENT/bin/:$PATH
-export LC_ALL=C
-export CUDA_VISIBLE_DEVICES="-1" # modify yourself
+
 
 corpus=/Work21/2020/songtongtong/data/corpus/AISHELL-1 # modify yourself
 nj=16
 
 stage=0
 stop_stage=0
+data_type="wav"
 
 data_stage=-4
 
@@ -29,13 +30,13 @@ discarded_threshold=5 # Discard characters that appear less than 5 times
 dict=data/dict/lang_char.txt
 
 feat_stage=-2
-speed_perturb=true
+speed_perturb=false
 
 formatdata_stage=-1
 
 # stage 0: Training
 training_stage=0
-num_workers=1
+num_workers=4
 train_set=train
 dev_set=dev
 
@@ -44,23 +45,25 @@ checkpoint=
 cmvn_file=
 
 # using wenet pre-trained model
-pre_trained=../../pre-trained/aishell2_20210618_u2pp_conformer_exp
-bpe_model=../../pre-trained/librispeech_20210610_u2pp_conformer_exp/train_960_unigram5000.model
-cmvn_file=$pre_trained/global_cmvn
-dict=$pre_trained/words.txt
-checkpoint=$pre_trained/final.pt
+# pre_trained=../../pre-trained/aishell2_20210618_u2pp_conformer_exp
+# bpe_model=../../pre-trained/librispeech_20210610_u2pp_conformer_exp/train_960_unigram5000.model
+# cmvn_file=$pre_trained/global_cmvn
+# dict=$pre_trained/words.txt
+# checkpoint=$pre_trained/final.pt 
 
-exp_name=test # modify yourself
+exp_name=test_1_ddp # modify yourself
 
 
 # stage 1: Average Model
 avgm_stage=1
-start=45
-end=49
+val_best=true
+num=5
+# start=0
+# end=49
 
 # stage 2: Decoding
 decoding_stage=2
-decoding_num_workers=2
+decoding_num_workers=4
 recg_set="test" # modify yourself
 decode_mode="ctc_greedy_search ctc_prefix_beam_search attention_rescoring attention"
 beam_size=10
@@ -78,7 +81,8 @@ wer_stage=3
 . tools/parse_options.sh || exit 1;
 
 exp_dir=exp/$exp_name
-decode_checkpoint=$exp_dir/avg_${start}to${end}.pt
+decode_checkpoint=$exp_dir/avg_${num}.pt
+# decode_checkpoint=$exp_dir/avg_${start}to${end}.pt
 
 if [ ${stage} -le ${data_stage} ] && [ ${stop_stage} -ge ${data_stage} ]; then
     echo "===== stage ${data_stage}: Prepare data ====="
@@ -101,12 +105,14 @@ fi
 
 if [ ${stage} -le ${feat_stage} ] && [ ${stop_stage} -ge ${feat_stage} ]; then
     echo "===== stage ${feat_stage}: Prepare Feat ====="
-    utils/perturb_data_dir_speed.sh 0.9 data/train data/train_sp0.9
-    utils/perturb_data_dir_speed.sh 1.1 data/train data/train_sp1.1
-    utils/combine_data.sh data/train_sp data/train data/train_sp0.9 data/train_sp1.1
+    if $speed_perturb; then
+        utils/perturb_data_dir_speed.sh 0.9 data/train data/train_sp0.9
+        utils/perturb_data_dir_speed.sh 1.1 data/train data/train_sp1.1
+        utils/combine_data.sh data/train_sp data/train data/train_sp0.9 data/train_sp1.1
+    fi
     for x in ${train_set} dev test; do
         steps/make_fbank.sh --nj $nj \
-            --write_utt2num_frames true --fbank_config $fbank_conf --compress true data/$x
+            --write_utt2num_frames true --fbank_config conf/fbank.conf --compress true data/$x
     done
     echo "===== stage ${feat_stage}: Prepare Feat Successfully !====="
 fi
@@ -115,12 +121,17 @@ if [ ${stage} -le ${formatdata_stage} ] && [ ${stop_stage} -ge ${formatdata_stag
     echo "===== stage ${formatdata_stage}: Format data ====="
     for data in test dev ${train_set};do
         tools/fix_data_dir.sh data/$data
-        tools/format_data.sh --nj ${nj} \
-            --feat-type "wav" --feat data/$data/wav.scp \
-            --raw true data/$data > data/$data/format.data
-        # kaldi feature
-        # tools/format_data.sh --nj ${nj} \
-        #     --feat data/$data/feats.scp data/$data > data/$data/format.data
+        if [ $data_type = "wav" ];then
+            tools/format_data.sh --nj ${nj} \
+                --feat-type "wav" \
+                --feat data/$data/wav.scp \
+                data/$data $dict > data/$data/format.wav.data
+        else
+            tools/format_data.sh --nj ${nj} \
+                --feat data/$data/feats.scp \
+                data/$data $dict > data/$data/format.feat.data
+        fi
+        
     done
     echo "===== stage ${formatdata_stage}: Format data Successfully !====="
 fi
@@ -130,16 +141,21 @@ if [ ${stage} -le ${training_stage} ] && [ ${stop_stage} -ge ${training_stage} ]
     mkdir -p $exp_dir
     [ -f $exp_dir/train.log ] && rm $exp_dir/train.log
     num_gpus=$(echo $CUDA_VISIBLE_DEVICES | awk -F "," '{print NF}')
+    gpuid=$CUDA_VISIBLE_DEVICES
+    # python3 openeat/bin/train.py \
+    # python3 -m torch.distributed.run --nproc_per_node $num_gpus openeat/bin/train_ddp.py \
     python3 openeat/bin/train.py \
-          --ngpus $num_gpus \
-          --num_workers $num_workers \
-          --config $train_config \
-          --dict $dict \
-          --train_data data/$train_set/format.data \
-          --cv_data data/$dev_set/format.data \
-          --exp_dir $exp_dir \
-          ${cmvn_file:+--cmvn_file $cmvn_file} \
-          ${checkpoint:+--checkpoint $checkpoint}
+        --gpuid $gpuid \
+        --config $train_config \
+        --data_type $data_type \
+        --dict $dict \
+        --train_data data/$train_set/format.${data_type}.data \
+        --cv_data data/$dev_set/format.${data_type}.data \
+        --exp_dir $exp_dir \
+        --num_workers $num_workers \
+        ${cmvn_file:+--cmvn_file $cmvn_file} \
+        ${checkpoint:+--checkpoint $checkpoint}
+
     echo "===== stage ${training_stage}: Training Successfully !====="
 fi
 
@@ -149,8 +165,10 @@ if [ ${stage} -le ${avgm_stage} ] && [ ${stop_stage} -ge ${avgm_stage} ]; then
     python3 openeat/bin/average_model.py \
         --dst_model $decode_checkpoint \
         --src_path $exp_dir  \
-        --start $start \
-        --end $end
+        --num $num \
+        --val_best 
+        # --start $start \
+        # --end $end \
     echo "=====  stage ${avgm_stage}: Average Model Successfully !====="
 fi
 
@@ -175,15 +193,17 @@ if [ ${stage} -le ${decoding_stage} ] && [ ${stop_stage} -ge ${decoding_stage} ]
                 gpu_id=$(echo $CUDA_VISIBLE_DEVICES | cut -d',' -f$[$idx+1])
                 # gpu_id -1 for cpu
                 python3 openeat/bin/recognize.py \
+                    --config $exp_dir/train.yaml \
+                    --data_type $data_type \
                     --gpu $gpu_id \
                     --mode $mode \
-                    --config $exp_dir/train.yaml \
                     --test_data  $slice \
                     --checkpoint $decode_checkpoint \
                     --beam_size $beam_size \
                     --batch_size $batch_size \
                     --dict $dict \
                     --result_file $tmpdir/$name.text \
+                    ${$raw_wav:+--raw_wav} \
                     ${lm:+--lm $lm} \
                     ${lm_weight:+--lm_weight $lm_weight} \
                     ${lm_config:+--lm_config $lm_config}

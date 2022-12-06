@@ -51,9 +51,9 @@ if __name__ == '__main__':
                         default=None,
                         type=str,
                         help='bpe model for english part')
-    parser.add_argument('--raw_wav',
-                        action="store_true",
-                        help='whether raw wav')
+    parser.add_argument('--data_type',
+                        default="wav", # kaldi or wav
+                        help='kaldi feat or raw wav')
     parser.add_argument('--num_workers', type=int,
                         default=1)
     parser.add_argument('--gpu',
@@ -117,9 +117,8 @@ if __name__ == '__main__':
             arr = line.strip().split()
             char_dict[arr[0]] = int(arr[1])
     token2char = {v:k for k,v in char_dict.items()}
-     
-    configs['dataset_conf']['raw_wav'] = args.raw_wav
-    configs['dataset_conf']['min_length'] = 1
+    configs['dataset_conf']['data_type'] = args.data_type
+    configs['dataset_conf']['min_length'] = 0
     configs['dataset_conf']['max_length'] = 100000
     dataset_conf = configs.get('dataset_conf', {})
     dataset_conf['speed_perturb'] = False
@@ -138,7 +137,7 @@ if __name__ == '__main__':
     test_collate_conf['spec_sub'] = False
     test_collate_conf['spec_aug'] = False
     test_collate_func = audio_collate_func(**test_collate_conf,
-                                    raw_wav=args.raw_wav)
+                                    data_type=args.data_type)
     
     test_data_loader = DataLoader(test_dataset,
                                   collate_fn=test_collate_func,
@@ -186,37 +185,40 @@ if __name__ == '__main__':
             features_length = batch['features_length']
             targets = batch['targets']
             targets_length = batch['targets_length']
-            if args.mode == 'attention':
-                hyps = model.recognize(
-                    features,
-                    features_length,
-                    beam_size=args.beam_size)
-                hyps = [hyp.tolist() for hyp in hyps]
-            elif args.mode == 'attention_rescoring':
-                assert (features.size(0) == 1)
-                hyps, encoder_out, decoder_out = model.attention_rescoring(
-                    features,
-                    features_length,
-                    beam_size=args.beam_size,
-                    ctc_weight = args.ctc_weight,
-                    reverse_weight = args.reverse_weight,
-                    lm = lm,
-                    lm_weight=args.lm_weight,
-                    autoregressive = autoregressive,
-                    token2char = token2char
-                )
-                hyps = [hyps]
-            elif args.mode == 'ctc_greedy_search':
-                hyps = model.ctc_greedy_search(
-                    features,
-                    features_length)
-            elif args.mode == 'ctc_prefix_beam_search':
-                assert (features.size(0) == 1)
-                hyps = model.ctc_prefix_beam_search(
-                    features,
-                    features_length,
-                    beam_size=args.beam_size)
-                hyps = [hyps]
+            try:
+                if args.mode == 'attention':
+                    hyps = model.recognize(
+                        features,
+                        features_length,
+                        beam_size=args.beam_size)
+                    hyps = [hyp.tolist() for hyp in hyps]
+                elif args.mode == 'attention_rescoring':
+                    assert (features.size(0) == 1)
+                    hyps, encoder_out, decoder_out = model.attention_rescoring(
+                        features,
+                        features_length,
+                        beam_size=args.beam_size,
+                        ctc_weight = args.ctc_weight,
+                        reverse_weight = args.reverse_weight,
+                        lm = lm,
+                        lm_weight=args.lm_weight,
+                        autoregressive = autoregressive,
+                        token2char = token2char
+                    )
+                    hyps = [hyps]
+                elif args.mode == 'ctc_greedy_search':
+                    hyps = model.ctc_greedy_search(
+                        features,
+                        features_length)
+                elif args.mode == 'ctc_prefix_beam_search':
+                    assert (features.size(0) == 1)
+                    hyps = model.ctc_prefix_beam_search(
+                        features,
+                        features_length,
+                        beam_size=args.beam_size)
+                    hyps = [hyps]
+            except:
+                pass
             for i, key in enumerate(keys):
                 # numpy.savetxt(os.path.join(os.path.dirname(args.result_file),'encoder/'+key+'.txt'),encoder_out[i].cpu().numpy())
                 # numpy.savetxt(os.path.join(os.path.dirname(args.result_file),'decoder/'+key+'.txt'),decoder_out[i].cpu().numpy())

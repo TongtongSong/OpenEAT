@@ -84,6 +84,7 @@ class Encoder(torch.nn.Module):
                 dropout_rate
             ) for _ in range(num_blocks//num_blocks_share)
         ])
+        self.after_norm = torch.nn.LayerNorm(d_model, eps=1e-5)
     def output_size(self) -> int:
         return self._output_size
 
@@ -105,6 +106,7 @@ class Encoder(torch.nn.Module):
         for idx,layer in enumerate(self.encoders):
             for _ in range(self.num_blocks_share):
                 xs, _ = layer(xs, masks, pos_emb)
+        xs = self.after_norm(xs)
         return xs, masks, pos_emb
         
 

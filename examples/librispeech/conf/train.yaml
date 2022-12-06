@@ -53,7 +53,7 @@ collate_conf:
 
 # dataset related
 dataset_conf:
-    speed_perturb: True
+    speed_perturb: False
     speeds: [0.9, 1.1, 0.1]
     max_length: 2000
     min_length: 10

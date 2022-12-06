@@ -33,8 +33,7 @@ class Decoder(torch.nn.Module):
         attention_dim = d_model
         adapter_layer_args = (d_model, dropout_rate, 
                              down_size, scalar)
-        adapter_layer = Adapter
-        self.repeat_times = repeat_times 
+        adapter_layer = Adapter 
         self.decoders = torch.nn.ModuleList([
             DecoderLayer(
                 attention_dim,
